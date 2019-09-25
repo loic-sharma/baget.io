@@ -1,17 +1,31 @@
+using System.Threading;
+using System.Threading.Tasks;
+using BaGet.Protocol.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace baget.io.functions
 {
-    public static class CatalogLeafProcessor
+    public class CatalogLeafProcessor
     {
-        [FunctionName("ProcessCatalogLeaf")]
-        public static void Run(
-            [QueueTrigger("catalog-leafs", Connection = "")]
-            string myQueueItem,
-            ILogger log)
+        private readonly ICatalogLeafItemProcessor _leafProcessor;
+
+        public CatalogLeafProcessor(ICatalogLeafItemProcessor leafProcessor)
         {
-            log.LogInformation($"C# Queue trigger function processed: {myQueueItem}");
+            _leafProcessor = leafProcessor;
+        }
+
+        [FunctionName("ProcessCatalogLeaf")]
+        public async Task Run(
+            [QueueTrigger("catalog-leafs", Connection = "StorageQueueConnectionString")]
+            string message,
+            ILogger log,
+            CancellationToken cancellationToken)
+        {
+            var leafItem = JsonConvert.DeserializeObject<CatalogLeafItem>(message);
+
+            await _leafProcessor.ProcessAsync(leafItem, cancellationToken);
         }
     }
 }

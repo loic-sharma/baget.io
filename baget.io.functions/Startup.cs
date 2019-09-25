@@ -1,23 +1,26 @@
-﻿extern alias AzureStorageCommon;
+extern alias AzureStorageCommon;
+extern alias AzureStorageBlob;
 
+using System.Net;
+using System.Net.Http;
+using BaGet.Azure;
+using BaGet.Core;
+using BaGet.Protocol;
+using Microsoft.Azure.Cosmos.Table;
 using Microsoft.Azure.Functions.Extensions.DependencyInjection;
-using Microsoft.WindowsAzure.Storage;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using AzureStorageBlob.Microsoft.WindowsAzure.Storage.Blob;
 
 [assembly: FunctionsStartup(typeof(baget.io.functions.Startup))]
 
 namespace baget.io.functions
 {
-
+    using CloudStorageAccount = AzureStorageCommon.Microsoft.WindowsAzure.Storage.CloudStorageAccount;
+    using TableStorageAccount = Microsoft.Azure.Cosmos.Table.CloudStorageAccount;
 
     public class Startup : FunctionsStartup
     {
-        public override void Configure(IFunctionsHostBuilder builder)
-        {
-            
-            throw new System.NotImplementedException();
-        }
-
-        /*
         public override void Configure(IFunctionsHostBuilder builder)
         {
             builder.Services.AddSingleton(provider =>
@@ -39,7 +42,7 @@ namespace baget.io.functions
             {
                 // TODO: Config
                 var account = TableStorageAccount.Parse(
-                    "DefaultEndpointsProtocol=https;AccountName=baget002;AccountKey=u9N1HdlVB++9Hg5LEhXHMfPQ5L56YiRPVdgaETi6rGj1cXu7vCOUaWhlD28khgQh8ixGprtzXV9H6/YaIj6qiA==;EndpointSuffix=core.windows.net");
+                    "UseDevelopmentStorage=true");
                 var tableClient = account.CreateCloudTableClient();
 
                 var logger = provider.GetRequiredService<ILogger<TablePackageService>>();
@@ -49,17 +52,8 @@ namespace baget.io.functions
 
             builder.Services.AddSingleton(provider =>
             {
-                // TODO: Config
                 var account = CloudStorageAccount.Parse(
-                    "DefaultEndpointsProtocol=https;AccountName=baget002;AccountKey=u9N1HdlVB++9Hg5LEhXHMfPQ5L56YiRPVdgaETi6rGj1cXu7vCOUaWhlD28khgQh8ixGprtzXV9H6/YaIj6qiA==;EndpointSuffix=core.windows.net");
-                var queueClient = account.CreateCloudQueueClient();
-
-                return queueClient.GetQueueReference("catalog-leafs");
-            });
-            builder.Services.AddSingleton(provider =>
-            {
-                var account = CloudStorageAccount.Parse(
-                    "DefaultEndpointsProtocol=https;AccountName=baget002;AccountKey=u9N1HdlVB++9Hg5LEhXHMfPQ5L56YiRPVdgaETi6rGj1cXu7vCOUaWhlD28khgQh8ixGprtzXV9H6/YaIj6qiA==;EndpointSuffix=core.windows.net");
+                    "UseDevelopmentStorage=true");
 
                 return account.CreateCloudBlobClient();
             });
@@ -70,7 +64,7 @@ namespace baget.io.functions
             {
                 // TODO: Config
                 return provider.GetRequiredService<ProcessCatalogLeafItem>();
-                //return provider.GetRequiredService<QueueCatalogLeafItem>();
-            });*/
+            });
+        }
     }
 }

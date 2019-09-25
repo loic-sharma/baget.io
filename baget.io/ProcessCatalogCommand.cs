@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -63,7 +63,7 @@ namespace baget.io
             CancellationToken cancellationToken)
         {
             var catalogPageUrls = new ConcurrentBag<string>(
-                catalogIndex.Items.Select(i => i.CatalogPageUrl).Take(500));
+                catalogIndex.Items.Select(i => i.CatalogPageUrl));
             var catalogLeafItems = new ConcurrentBag<CatalogLeafItem>();
 
             await ProcessInParallel(async () =>

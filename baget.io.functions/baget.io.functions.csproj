@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netcoreapp2.1</TargetFramework>
     <AzureFunctionsVersion>v2</AzureFunctionsVersion>
@@ -11,6 +11,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Azure.Storage.Blob" Version="9.4.1" Alias="AzureStorageBlob" />
     <PackageReference Include="Microsoft.Azure.Storage.Common" Version="9.4.1" Alias="AzureStorageCommon" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\baget.io.core\baget.io.core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">
