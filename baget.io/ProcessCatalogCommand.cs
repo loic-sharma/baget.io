@@ -41,11 +41,17 @@ namespace baget.io
             ServicePointManager.DefaultConnectionLimit = MaxDegreeOfParallelism;
             ServicePointManager.MaxServicePointIdleTime = 10000;
 
-            _logger.LogInformation("Finding catalog leafs...");
+            var cursor = await _cursor.GetAsync(cancellationToken);
+            if (cursor == null)
+            {
+                cursor = DateTimeOffset.MinValue;
+            }
+
+            _logger.LogInformation("Finding catalog leafs comitted after time {Cursor}...", cursor);
 
             var catalogClient = await _clientFactory.CreateCatalogClientAsync(cancellationToken);
             var catalogIndex = await catalogClient.GetIndexAsync(cancellationToken);
-            var catalogLeafItems = await GetCatalogLeafItems(catalogClient, catalogIndex, cancellationToken);
+            var catalogLeafItems = await GetCatalogLeafItems(catalogClient, catalogIndex, cursor.Value, cancellationToken);
 
             catalogLeafItems = DeduplicateCatalogLeafItems(catalogLeafItems);
 
@@ -60,34 +66,28 @@ namespace baget.io
         private async Task<IEnumerable<CatalogLeafItem>> GetCatalogLeafItems(
             ICatalogClient catalogClient,
             CatalogIndex catalogIndex,
+            DateTimeOffset cursor,
             CancellationToken cancellationToken)
         {
-            var catalogPageUrls = new ConcurrentBag<string>(
-                catalogIndex.Items.Select(i => i.CatalogPageUrl));
             var catalogLeafItems = new ConcurrentBag<CatalogLeafItem>();
+            var catalogPageUrls = new ConcurrentBag<string>(
+                catalogIndex
+                    .Items
+                    .Where(i => i.CommitTimestamp > cursor)
+                    .Select(i => i.CatalogPageUrl));
 
-            await ProcessInParallel(async () =>
+            await ProcessInParallel(catalogPageUrls, async catalogPageUrl =>
             {
-                while (catalogPageUrls.TryTake(out var catalogPageUrl))
-                {
-                    try
-                    {
-                        _logger.LogInformation("Processing catalog page {CatalogPageUrl}...", catalogPageUrl);
+                _logger.LogInformation("Processing catalog page {CatalogPageUrl}...", catalogPageUrl);
 
-                        var page = await catalogClient.GetPageAsync(catalogPageUrl, cancellationToken);
+                var page = await catalogClient.GetPageAsync(catalogPageUrl, cancellationToken);
                         
-                        foreach (var catalogLeafItem in page.Items)
-                        {
-                            catalogLeafItems.Add(catalogLeafItem);
-                        }
-
-                        _logger.LogInformation("Processed catalog page {CatalogPageUrl}", catalogPageUrl);
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.LogError(e, "Unable to process catalog page {CatalogPageUrl}", catalogPageUrl);
-                    }
+                foreach (var catalogLeafItem in page.Items.Where(i => i.CommitTimestamp > cursor))
+                {
+                    catalogLeafItems.Add(catalogLeafItem);
                 }
+
+                _logger.LogInformation("Processed catalog page {CatalogPageUrl}", catalogPageUrl);
             });
 
             return catalogLeafItems;
@@ -110,31 +110,31 @@ namespace baget.io
         {
             var work = new ConcurrentBag<CatalogLeafItem>(catalogLeafItems);
 
-            await ProcessInParallel(async () =>
+            await ProcessInParallel(work, async catalogLeafItem =>
             {
-                while (work.TryTake(out var catalogLeafItem))
-                {
-                    try
-                    {
-                        await _leafProcessor.ProcessAsync(catalogLeafItem, cancellationToken);
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.LogError(
-                            e,
-                            "Failed to process catalog leaf item for leaf {CatalogLeafUrl} due to exception",
-                            catalogLeafItem.CatalogLeafUrl);
-                    }
-                }
+                await _leafProcessor.ProcessAsync(catalogLeafItem, cancellationToken);
             });
         }
 
-        private static async Task ProcessInParallel(Func<Task> worker)
+        private async Task ProcessInParallel<T>(ConcurrentBag<T> allWork, Func<T, Task> worker)
         {
              await Task.WhenAll(
                 Enumerable
-                    .Repeat(worker, MaxDegreeOfParallelism)
-                    .Select(x => x()));
+                    .Repeat(allWork, MaxDegreeOfParallelism)
+                    .Select(async work =>
+                    {
+                        while (work.TryTake(out var item))
+                        {
+                            try
+                            {
+                                await worker(item);
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.LogError(e, "Unable to process item due to exception");
+                            }
+                        }
+                    }));
         }
     }
 }
