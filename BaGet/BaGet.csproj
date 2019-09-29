@@ -10,13 +10,20 @@
     <PackageReference Include="BaGet.Core" Version="0.2.0-master-903" />
     <PackageReference Include="BaGet.Protocol" Version="0.2.0-master-905" />
     <PackageReference Include="Microsoft.Azure.Storage.Queue" Version="9.4.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.2.0" />
     <PackageReference Include="System.Threading.Channels" Version="4.5.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\baget.io.core\BaGet.Core.csproj" />
+    <ProjectReference Include="..\BaGet.Cloud\BaGet.Cloud.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -8,7 +8,7 @@ using BaGet.Protocol.Models;
 using Microsoft.Extensions.Logging;
 using NuGet.Packaging;
 
-namespace baget.io
+namespace BaGet
 {
     public class ProcessCatalogLeafItem : ICatalogLeafItemProcessor
     {

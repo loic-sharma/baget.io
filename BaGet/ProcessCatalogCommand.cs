@@ -11,7 +11,7 @@ using BaGet.Protocol.Models;
 using Microsoft.Extensions.Logging;
 using NuGet.Packaging.Core;
 
-namespace baget.io
+namespace BaGet
 {
     class ProcessCatalogCommand : IHostedCommand
     {
@@ -81,7 +81,7 @@ namespace baget.io
                 _logger.LogInformation("Processing catalog page {CatalogPageUrl}...", catalogPageUrl);
 
                 var page = await catalogClient.GetPageAsync(catalogPageUrl, cancellationToken);
-                        
+
                 foreach (var catalogLeafItem in page.Items.Where(i => i.CommitTimestamp > cursor))
                 {
                     catalogLeafItems.Add(catalogLeafItem);

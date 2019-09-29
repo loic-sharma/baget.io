@@ -5,7 +5,7 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
-namespace baget.io.functions
+namespace BaGet.Functions
 {
     public class CatalogLeafProcessor
     {

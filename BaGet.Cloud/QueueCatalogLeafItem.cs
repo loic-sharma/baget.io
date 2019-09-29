@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage.Queue;
 using Newtonsoft.Json;
 
-namespace baget.io
+namespace BaGet
 {
     public class QueueCatalogLeafItem : ICatalogLeafItemProcessor
     {

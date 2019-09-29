@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using BaGet.Protocol.Catalog;
@@ -6,17 +6,17 @@ using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 
-namespace baget.io
+namespace BaGet
 {
     public class BlobCursor : ICursor
     {
         private readonly CloudBlockBlob _blob;
 
-        public BlobCursor(CloudBlobClient blobClient)
+        public BlobCursor(CloudBlobContainer blobContainer)
         {
-            var container = blobClient.GetContainerReference("api");
-            
-            _blob = container.GetBlockBlobReference("cursor.json");
+            if (blobContainer == null) throw new ArgumentNullException(nameof(blobContainer));
+
+            _blob = blobContainer.GetBlockBlobReference("cursor.json");
         }
 
         public async Task<DateTimeOffset?> GetAsync(CancellationToken cancellationToken = default)

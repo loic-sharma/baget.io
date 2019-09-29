@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.29230.47
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BaGet", "BaGet\BaGet.csproj", "{4C7F3E45-032D-4BD6-901C-0860AA32C419}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BaGet.Core", "BaGet.Core\BaGet.Core.csproj", "{F9FF2044-4D6B-4583-ABD9-B246EC17BDC1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BaGet.Cloud", "BaGet.Cloud\BaGet.Cloud.csproj", "{F9FF2044-4D6B-4583-ABD9-B246EC17BDC1}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BaGet.Functions", "BaGet.Functions\BaGet.Functions.csproj", "{DB3E3FC4-A58B-42FE-B76E-810860746047}"
 EndProject

@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using BaGet.Protocol.Models;
 
-namespace baget.io
+namespace BaGet
 {
     public interface ICatalogLeafItemProcessor
     {

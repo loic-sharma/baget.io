@@ -12,9 +12,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using AzureStorageBlob.Microsoft.WindowsAzure.Storage.Blob;
 
-[assembly: FunctionsStartup(typeof(baget.io.functions.Startup))]
+[assembly: FunctionsStartup(typeof(BaGet.Functions.Startup))]
 
-namespace baget.io.functions
+namespace BaGet.Functions
 {
     using CloudStorageAccount = AzureStorageCommon.Microsoft.WindowsAzure.Storage.CloudStorageAccount;
     using TableStorageAccount = Microsoft.Azure.Cosmos.Table.CloudStorageAccount;
@@ -59,7 +59,7 @@ namespace baget.io.functions
             });
 
             builder.Services.AddSingleton<ProcessCatalogLeafItem>();
-            
+
             builder.Services.AddSingleton<ICatalogLeafItemProcessor>(provider =>
             {
                 // TODO: Config

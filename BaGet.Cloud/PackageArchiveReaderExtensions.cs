@@ -4,7 +4,7 @@ using System.Linq;
 using BaGet.Core;
 using NuGet.Packaging;
 
-namespace baget.io
+namespace BaGet
 {
     using NuGetPackageType = NuGet.Packaging.Core.PackageType;
 

@@ -13,7 +13,7 @@
     <PackageReference Include="Microsoft.Azure.Storage.Common" Version="9.4.1" Alias="AzureStorageCommon" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\baget.io.core\BaGet.Core.csproj" />
+    <ProjectReference Include="..\BaGet.Cloud\BaGet.Cloud.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">

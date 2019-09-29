@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -6,29 +7,38 @@ using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
 using Microsoft.Azure.Cosmos.Table;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Queue;
 
-namespace baget.io
+namespace BaGet
 {
     using CloudStorageAccount = Microsoft.WindowsAzure.Storage.CloudStorageAccount;
     using TableStorageAccount = Microsoft.Azure.Cosmos.Table.CloudStorageAccount;
 
-    class Program
+    public class Program
     {
-        static async Task Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var host = new HostBuilder()
                 .UseConsoleLifetime()
+                .ConfigureAppConfiguration((ctx, config) =>
+                {
+                    config.SetBasePath(Directory.GetCurrentDirectory());
+                    config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                })
                 .ConfigureLogging((ctx, logging) =>
                 {
                     logging.AddConsole();
                 })
-                .ConfigureServices(services =>
+                .ConfigureServices((ctx, services) =>
                 {
+                    services.Configure<AppConfiguration>(ctx.Configuration);
+
                     services.AddSingleton(provider =>
                     {
                         return new HttpClient(new HttpClientHandler
@@ -44,36 +54,36 @@ namespace baget.io
                             "https://api.nuget.org/v3/index.json");
                     });
 
-                    services.AddSingleton<IPackageService>(provider =>
+                    services.AddSingleton(provider =>
                     {
-                        // TODO: Config
-                        var account = TableStorageAccount.Parse(
-                            "UseDevelopmentStorage=true");
-                        var tableClient = account.CreateCloudTableClient();
+                        var config = provider.GetRequiredService<IOptionsSnapshot<AppConfiguration>>();
 
-                        var logger = provider.GetRequiredService<ILogger<TablePackageService>>();
-
-                        return new TablePackageService(tableClient, logger);
+                        return TableStorageAccount
+                            .Parse(config.Value.TableStorageConnectionString)
+                            .CreateCloudTableClient();
                     });
 
                     services.AddSingleton(provider =>
                     {
-                        // TODO: Config
-                        var account = CloudStorageAccount.Parse(
-                            "UseDevelopmentStorage=true");
-                        var queueClient = account.CreateCloudQueueClient();
+                        var config = provider.GetRequiredService<IOptionsSnapshot<AppConfiguration>>();
+                        var queueClient = CloudStorageAccount
+                            .Parse(config.Value.StorageQueueConnectionString)
+                            .CreateCloudQueueClient();
 
-                        return queueClient.GetQueueReference("catalog-leafs");
+                        return queueClient.GetQueueReference(config.Value.StorageQueueName);
                     });
 
                     services.AddSingleton(provider =>
                     {
-                        var account = CloudStorageAccount.Parse(
-                            "UseDevelopmentStorage=true");
+                        var config = provider.GetRequiredService<IOptionsSnapshot<AppConfiguration>>();
+                        var blobClient = CloudStorageAccount
+                            .Parse(config.Value.BlobStorageConnectionString)
+                            .CreateCloudBlobClient();
 
-                        return account.CreateCloudBlobClient();
+                        return blobClient.GetContainerReference(config.Value.BlobContainerName);
                     });
 
+                    services.AddSingleton<IPackageService, TablePackageService>();
                     services.AddSingleton<ICursor, BlobCursor>();
 
                     services.AddSingleton<ProcessCatalogLeafItem>();
