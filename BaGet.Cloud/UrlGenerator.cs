@@ -6,9 +6,9 @@ namespace BaGet
 {
     public class UrlGenerator : IUrlGenerator
     {
-        private readonly IOptionsSnapshot<Configuration> _config;
+        private readonly IOptions<Configuration> _config;
 
-        public UrlGenerator(IOptionsSnapshot<Configuration> config)
+        public UrlGenerator(IOptions<Configuration> config)
         {
             _config = config;
         }

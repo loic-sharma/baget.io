@@ -48,65 +48,7 @@ namespace BaGet
                 host.ConfigureServices((ctx, services) =>
                 {
                     services.Configure<Configuration>(ctx.Configuration);
-
-                    services.AddSingleton(provider =>
-                    {
-                        return new HttpClient(new HttpClientHandler
-                        {
-                            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-                        });
-                    });
-
-                    services.AddSingleton(provider =>
-                    {
-                        return new NuGetClientFactory(
-                            provider.GetRequiredService<HttpClient>(),
-                            "https://api.nuget.org/v3/index.json");
-                    });
-
-                    services.AddSingleton(provider =>
-                    {
-                        var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
-
-                        return TableStorageAccount
-                            .Parse(config.Value.TableStorageConnectionString)
-                            .CreateCloudTableClient();
-                    });
-
-                    services.AddSingleton<IQueueClient>(provider =>
-                    {
-                        var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
-                        var builder = new ServiceBusConnectionStringBuilder(
-                            config.Value.ServiceBusConnectionString);
-
-                        return new QueueClient(builder, ReceiveMode.PeekLock);
-                    });
-
-                    services.AddSingleton(provider =>
-                    {
-                        var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
-                        var blobClient = CloudStorageAccount
-                            .Parse(config.Value.BlobStorageConnectionString)
-                            .CreateCloudBlobClient();
-
-                        return blobClient.GetContainerReference(config.Value.BlobContainerName);
-                    });
-
-                    services.AddSingleton<ISearchIndexClient>(provider =>
-                    {
-                        var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
-
-                        // TODO https://github.com/loic-sharma/BaGet/issues/362
-                        return null;
-                    });
-
-                    services.AddSingleton<IPackageService, TablePackageService>();
-                    services.AddSingleton<ICursor, BlobCursor>();
-                    services.AddSingleton<IUrlGenerator, UrlGenerator>();
-
-                    services.AddSingleton<ProcessCatalogLeafItem>();
-                    services.AddSingleton<QueueCatalogLeafItems>();
-                    services.AddSingleton<PackageIndexer>();
+                    services.AddBaGet();
 
                     services.AddSingleton(provider =>
                     {

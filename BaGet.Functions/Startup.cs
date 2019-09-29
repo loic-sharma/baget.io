@@ -1,70 +1,35 @@
-extern alias AzureStorageCommon;
-extern alias AzureStorageBlob;
-
-using System.Net;
-using System.Net.Http;
-using BaGet.Azure;
-using BaGet.Core;
-using BaGet.Protocol;
-using Microsoft.Azure.Cosmos.Table;
+using System;
 using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using AzureStorageBlob.Microsoft.WindowsAzure.Storage.Blob;
 
 [assembly: FunctionsStartup(typeof(BaGet.Functions.Startup))]
 
 namespace BaGet.Functions
 {
-    using CloudStorageAccount = AzureStorageCommon.Microsoft.WindowsAzure.Storage.CloudStorageAccount;
-    using TableStorageAccount = Microsoft.Azure.Cosmos.Table.CloudStorageAccount;
-
     public class Startup : FunctionsStartup
     {
         public override void Configure(IFunctionsHostBuilder builder)
         {
-            builder.Services.AddSingleton(provider =>
+            builder.Services.Configure<Configuration>(config =>
             {
-                return new HttpClient(new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-                });
+                config.RootUrl = Config("RootUrl");
+                config.BlobStorageConnectionString = Config("BlobStorageConnectionString");
+                config.BlobContainerName = Config("BlobContainerName");
+                config.TableStorageConnectionString = Config("TableStorageConnectionString");
             });
 
-            builder.Services.AddSingleton(provider =>
+            builder.Services.AddBaGet();
+        }
+
+        private static string Config(string name)
+        {
+            var value = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrEmpty(value))
             {
-                return new NuGetClientFactory(
-                    provider.GetRequiredService<HttpClient>(),
-                    "https://api.nuget.org/v3/index.json");
-            });
+                return null;
+            }
 
-            builder.Services.AddSingleton<IPackageService>(provider =>
-            {
-                // TODO: Config
-                var account = TableStorageAccount.Parse(
-                    "UseDevelopmentStorage=true");
-                var tableClient = account.CreateCloudTableClient();
-
-                var logger = provider.GetRequiredService<ILogger<TablePackageService>>();
-
-                return new TablePackageService(tableClient, logger);
-            });
-
-            builder.Services.AddSingleton(provider =>
-            {
-                var account = CloudStorageAccount.Parse(
-                    "UseDevelopmentStorage=true");
-
-                return account.CreateCloudBlobClient();
-            });
-
-            builder.Services.AddSingleton<ProcessCatalogLeafItem>();
-
-            builder.Services.AddSingleton<ICatalogLeafItemProcessor>(provider =>
-            {
-                // TODO: Config
-                return provider.GetRequiredService<ProcessCatalogLeafItem>();
-            });
+            return value;
         }
     }
 }
