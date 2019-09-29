@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -11,7 +11,7 @@ using Newtonsoft.Json;
 
 namespace BaGet
 {
-    class ProcessQueueCommand : IHostedCommand
+    public class ProcessQueueCommand
     {
         private const int MaxDegreeOfParallelism = 32;
 

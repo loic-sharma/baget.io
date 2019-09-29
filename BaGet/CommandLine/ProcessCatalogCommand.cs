@@ -13,7 +13,7 @@ using NuGet.Packaging.Core;
 
 namespace BaGet
 {
-    class ProcessCatalogCommand : IHostedCommand
+    public class ProcessCatalogCommand
     {
         private const int MaxDegreeOfParallelism = 32;
 

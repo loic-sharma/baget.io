@@ -1,6 +1,11 @@
+using System.CommandLine;
+using System.CommandLine.Builder;
+using System.CommandLine.Hosting;
+using System.CommandLine.Invocation;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using BaGet.Azure;
 using BaGet.Core;
@@ -24,18 +29,23 @@ namespace BaGet
     {
         public static async Task Main(string[] args)
         {
-            var host = new HostBuilder()
-                .UseConsoleLifetime()
-                .ConfigureAppConfiguration((ctx, config) =>
+            var parser = CommandLine.Create()
+            .UseDefaults()
+            .UseHost(host =>
+            {
+                host.ConfigureAppConfiguration((ctx, config) =>
                 {
                     config.SetBasePath(Directory.GetCurrentDirectory());
                     config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-                })
-                .ConfigureLogging((ctx, logging) =>
+                });
+
+                host.ConfigureLogging((ctx, logging) =>
                 {
+                    logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
                     logging.AddConsole();
-                })
-                .ConfigureServices((ctx, services) =>
+                });
+
+                host.ConfigureServices((ctx, services) =>
                 {
                     services.Configure<AppConfiguration>(ctx.Configuration);
 
@@ -89,19 +99,41 @@ namespace BaGet
                     services.AddSingleton<ProcessCatalogLeafItem>();
                     services.AddSingleton<QueueCatalogLeafItem>();
 
-                    services.AddSingleton<ICatalogLeafItemProcessor>(provider =>
+                    services.AddSingleton(provider =>
                     {
-                        // TODO: Config
-                        //return provider.GetRequiredService<ProcessCatalogLeafItem>();
-                        return provider.GetRequiredService<QueueCatalogLeafItem>();
+                        var parseResult = provider.GetRequiredService<ParseResult>();
+
+                        var leafProcessor = parseResult.HasOption("enqueue")
+                            ? (ICatalogLeafItemProcessor)provider.GetRequiredService<QueueCatalogLeafItem>()
+                            : (ICatalogLeafItemProcessor)provider.GetRequiredService<ProcessCatalogLeafItem>();
+
+                        var clientFactory = provider.GetRequiredService<NuGetClientFactory>();
+                        var cursor = provider.GetRequiredService<ICursor>();
+                        var logger = provider.GetRequiredService<ILogger<ProcessCatalogCommand>>();
+
+                        return new ProcessCatalogCommand(
+                            clientFactory,
+                            leafProcessor,
+                            cursor,
+                            logger);
                     });
 
-                    services.AddHostedCommand<ProcessCatalogCommand>();
-                    //services.AddHostedCommand<ProcessQueueCommand>();
-                })
-                .Build();
+                    services.AddSingleton(provider =>
+                    {
+                        var queue = provider.GetRequiredService<CloudQueue>();
+                        var leafProcessor = provider.GetRequiredService<ProcessCatalogLeafItem>();
+                        var logger = provider.GetRequiredService<ILogger<ProcessQueueCommand>>();
 
-            await host.RunAsync();
+                        return new ProcessQueueCommand(
+                            queue,
+                            leafProcessor,
+                            logger);
+                    });
+                });
+            })
+            .Build();
+
+            await parser.InvokeAsync(args);
         }
     }
 }
