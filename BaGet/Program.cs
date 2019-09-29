@@ -11,6 +11,7 @@ using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
 using Microsoft.Azure.Cosmos.Table;
+using Microsoft.Azure.Search;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -46,7 +47,7 @@ namespace BaGet
 
                 host.ConfigureServices((ctx, services) =>
                 {
-                    services.Configure<AppConfiguration>(ctx.Configuration);
+                    services.Configure<Configuration>(ctx.Configuration);
 
                     services.AddSingleton(provider =>
                     {
@@ -65,7 +66,7 @@ namespace BaGet
 
                     services.AddSingleton(provider =>
                     {
-                        var config = provider.GetRequiredService<IOptionsSnapshot<AppConfiguration>>();
+                        var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
 
                         return TableStorageAccount
                             .Parse(config.Value.TableStorageConnectionString)
@@ -74,7 +75,7 @@ namespace BaGet
 
                     services.AddSingleton(provider =>
                     {
-                        var config = provider.GetRequiredService<IOptionsSnapshot<AppConfiguration>>();
+                        var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
                         var queueClient = CloudStorageAccount
                             .Parse(config.Value.StorageQueueConnectionString)
                             .CreateCloudQueueClient();
@@ -84,7 +85,7 @@ namespace BaGet
 
                     services.AddSingleton(provider =>
                     {
-                        var config = provider.GetRequiredService<IOptionsSnapshot<AppConfiguration>>();
+                        var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
                         var blobClient = CloudStorageAccount
                             .Parse(config.Value.BlobStorageConnectionString)
                             .CreateCloudBlobClient();
@@ -92,11 +93,21 @@ namespace BaGet
                         return blobClient.GetContainerReference(config.Value.BlobContainerName);
                     });
 
+                    services.AddSingleton<ISearchIndexClient>(provider =>
+                    {
+                        var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
+
+                        // TODO
+                        return null;
+                    });
+
                     services.AddSingleton<IPackageService, TablePackageService>();
                     services.AddSingleton<ICursor, BlobCursor>();
+                    services.AddSingleton<IUrlGenerator, UrlGenerator>();
 
                     services.AddSingleton<ProcessCatalogLeafItem>();
                     services.AddSingleton<QueueCatalogLeafItem>();
+                    services.AddSingleton<PackageIndexer>();
 
                     services.AddSingleton(provider =>
                     {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,6 +6,7 @@ using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.WindowsAzure.Storage.Blob;
 using NuGet.Packaging;
 
 namespace BaGet
@@ -14,15 +15,21 @@ namespace BaGet
     {
         private readonly NuGetClientFactory _clientFactory;
         private readonly IPackageService _packages;
+        private readonly CloudBlobContainer _blobContainer;
+        private readonly PackageIndexer _indexer;
         private readonly ILogger<ProcessCatalogLeafItem> _logger;
 
         public ProcessCatalogLeafItem(
             NuGetClientFactory clientFactory,
             IPackageService packages,
+            CloudBlobContainer blobContainer,
+            PackageIndexer indexer,
             ILogger<ProcessCatalogLeafItem> logger)
         {
             _clientFactory = clientFactory;
             _packages = packages;
+            _blobContainer = blobContainer;
+            _indexer = indexer;
             _logger = logger;
         }
 
@@ -47,63 +54,63 @@ namespace BaGet
             _logger.LogInformation("Processed catalog leaf {CatalogLeafUrl}", catalogLeafItem.CatalogLeafUrl);
         }
 
-        private async Task ProcessPackageDetailsAsync(CatalogLeafItem catalogLeafItem, CancellationToken cancellationToken)
+        private async Task ProcessPackageDetailsAsync(
+            CatalogLeafItem catalogLeafItem,
+            CancellationToken cancellationToken)
         {
-            var packageMetadata = await GetPackageMetadata(catalogLeafItem, cancellationToken);
-            var result = await _packages.AddAsync(packageMetadata);
+            var catalogClient = await _clientFactory.CreateCatalogClientAsync(cancellationToken);
+            var catalogLeaf = await catalogClient.GetPackageDetailsLeafAsync(catalogLeafItem.CatalogLeafUrl, cancellationToken);
 
-            switch (result)
-            {
-                // The package has been added successfully, nothing else to do.
-                case PackageAddResult.Success:
-                    return;
-
-                // The package already exists. Update its metadata if necessary.
-                case PackageAddResult.PackageAlreadyExists:
-                    await UpdatePackageMetadata(catalogLeafItem, packageMetadata, cancellationToken);
-                    return;
-
-                default:
-                    throw new NotSupportedException($"Unknown add result '{result}'");
-            }
+            await IndexPackageAsync(catalogLeaf, cancellationToken);
         }
 
-        private async Task ProcessPackageDeleteAsync(CatalogLeafItem catalogLeafItem, CancellationToken cancellationToken)
+        private async Task ProcessPackageDeleteAsync(
+            CatalogLeafItem catalogLeafItem,
+            CancellationToken cancellationToken)
         {
             await _packages.UnlistPackageAsync(catalogLeafItem.PackageId, catalogLeafItem.ParsePackageVersion());
         }
 
-        private async Task<Package> GetPackageMetadata(CatalogLeafItem catalogLeafItem, CancellationToken cancellationToken)
+        private async Task IndexPackageAsync(
+            PackageDetailsCatalogLeaf catalogLeaf,
+            CancellationToken cancellationToken)
         {
-            var contentClient = await _clientFactory.CreatePackageContentClientAsync(cancellationToken);
-            var catalogClient = await _clientFactory.CreateCatalogClientAsync(cancellationToken);
+            var packageId = catalogLeaf.PackageId;
+            var packageVersion = catalogLeaf.ParsePackageVersion();
 
-            var id = catalogLeafItem.PackageId;
-            var version = catalogLeafItem.ParsePackageVersion();
-            var catalogLeaf = await catalogClient.GetPackageDetailsLeafAsync(catalogLeafItem.CatalogLeafUrl, cancellationToken);
-
+            Package package;
             Stream packageStream = null;
+            Stream readmeStream = null;
 
             try
             {
-                using (var stream = await contentClient.GetPackageContentStreamOrNullAsync(id, version, cancellationToken))
+                var contentClient = await _clientFactory.CreatePackageContentClientAsync(cancellationToken);
+                using (var stream = await contentClient.GetPackageContentStreamOrNullAsync(packageId, packageVersion, cancellationToken))
                 {
                     packageStream = await stream.AsTemporaryFileStreamAsync(cancellationToken);
                 }
 
                 _logger.LogInformation(
                     "Downloaded package {PackageId} {PackageVersion}, building metadata...",
-                    id,
-                    version);
+                    packageId,
+                    packageVersion);
 
-                using (var reader = new PackageArchiveReader(packageStream))
+                using (var reader = new PackageArchiveReader(packageStream, leaveStreamOpen: true))
                 {
-                    var package = reader.GetPackageMetadata();
+                    package = reader.GetPackageMetadata();
 
                     package.Listed = catalogLeaf.IsListed();
                     package.Published = catalogLeaf.Published.UtcDateTime;
 
-                    return package;
+                    if (package.HasReadme)
+                    {
+                        using (var stream = await reader.GetReadmeAsync(cancellationToken))
+                        {
+                            readmeStream = await stream.AsTemporaryFileStreamAsync(cancellationToken);
+                        }
+                    }
+
+                    await IndexPackageAsync(package, readmeStream, cancellationToken);
                 }
             }
             catch (Exception e)
@@ -111,26 +118,80 @@ namespace BaGet
                 _logger.LogError(
                     e,
                     "Failed to process package {PackageId} {PackageVersion}",
-                    id,
-                    version);
+                    packageId,
+                    packageVersion);
 
                 throw;
             }
             finally
             {
                 packageStream?.Dispose();
+                readmeStream?.Dispose();
             }
         }
 
-        private async Task UpdatePackageMetadata(CatalogLeafItem catalogLeafItem, Package latestPackage, CancellationToken cancellationToken)
+        private async Task IndexPackageAsync(
+            Package package,
+            Stream readmeStreamOrNull,
+            CancellationToken cancellationToken)
         {
-            var packageId = catalogLeafItem.PackageId;
-            var packageVersion = catalogLeafItem.ParsePackageVersion();
+            var packageId = package.Id.ToLowerInvariant();
+            var packageVersion = package.Version.ToNormalizedString().ToLowerInvariant();
+
+            if (readmeStreamOrNull != null)
+            {
+                _logger.LogInformation(
+                    "Uploading readme for package {PackageId} {PackageVersion}...",
+                    packageId,
+                    packageVersion);
+
+                var blob = _blobContainer.GetBlockBlobReference($"v3/package/{packageId}/{packageVersion}/readme");
+
+                blob.Properties.ContentType = "text/markdown";
+                blob.Properties.CacheControl = "max-age=120, must-revalidate";
+
+                await blob.UploadFromStreamAsync(readmeStreamOrNull, cancellationToken);
+
+                _logger.LogInformation(
+                    "Uploaded readme for package {PackageId} {PackageVersion}",
+                    packageId,
+                    packageVersion);
+            }
+
+            // Try to add the package to the database. If the package already exists,
+            // the add operation will fail and we will update the package's metadata instead.
+            var addResult = await _packages.AddAsync(package);
+            switch (addResult)
+            {
+                case PackageAddResult.Success:
+                    _logger.LogInformation(
+                        "Added package {PackageId} {PackageVersion} to database",
+                        packageId,
+                        packageVersion);
+                    break;
+
+                // The package already exists. Update its metadata instead.
+                case PackageAddResult.PackageAlreadyExists:
+                    await UpdatePackageMetadata(package, cancellationToken);
+                    break;
+
+                default:
+                    throw new NotSupportedException($"Unknown add result '{addResult}'");
+            }
+
+            // Lastly, use the database to update static resources and the search service.
+            await _indexer.BuildAsync(package.Id);
+        }
+
+        private async Task UpdatePackageMetadata(Package latestPackage, CancellationToken cancellationToken)
+        {
+            var packageId = latestPackage.Id;
+            var packageVersion = latestPackage.Version;
 
             _logger.LogInformation(
-                "Updating package {PackageId} {PackageVersion}..",
-                packageId,
-                packageVersion);
+                "Updating package {PackageId} {PackageVersion} in database..",
+                latestPackage.Id,
+                latestPackage.Version);
 
             var currentPackage = await _packages.FindOrNullAsync(
                 packageId,
@@ -140,14 +201,11 @@ namespace BaGet
 
             if (currentPackage == null)
             {
-                _logger.LogError(
-                    "Could not update package {PackageId} {PackageVersion} because it does not exist",
-                    packageId,
-                    packageVersion);
-
-                return;
+                throw new InvalidOperationException(
+                    $"Cannot update package {packageId} {packageVersion} because it does not exist");
             }
 
+            // TODO: Ideally we should replace all metadata.
             if (currentPackage.Listed != latestPackage.Listed)
             {
                 if (latestPackage.Listed)
@@ -161,7 +219,7 @@ namespace BaGet
             }
 
             _logger.LogInformation(
-                "Updated package {PackageId} {PackageVersion}",
+                "Updated package {PackageId} {PackageVersion} in database",
                 packageId,
                 packageVersion);
         }

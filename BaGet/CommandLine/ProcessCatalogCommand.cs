@@ -58,7 +58,7 @@ namespace BaGet
             _logger.LogInformation("Processing {CatalogLeafs} catalog leafs...", catalogLeafItems.Count());
 
             await ProcessCatalogLeafsAsync(catalogLeafItems, cancellationToken);
-            await _cursor.SetAsync(catalogIndex.CommitTimestamp);
+            await _cursor.SetAsync(catalogIndex.CommitTimestamp, cancellationToken);
 
             _logger.LogInformation("Finished processing catalog leafs");
         }
@@ -76,11 +76,18 @@ namespace BaGet
                     .Where(i => i.CommitTimestamp > cursor)
                     .Select(i => i.CatalogPageUrl));
 
-            await ProcessInParallel(catalogPageUrls, async catalogPageUrl =>
+            await ProcessInParallel(
+                catalogPageUrls,
+                ProcessCatalogPageUrlAsync,
+                cancellationToken);
+
+            return catalogLeafItems;
+
+            async Task ProcessCatalogPageUrlAsync(string catalogPageUrl, CancellationToken token)
             {
                 _logger.LogInformation("Processing catalog page {CatalogPageUrl}...", catalogPageUrl);
 
-                var page = await catalogClient.GetPageAsync(catalogPageUrl, cancellationToken);
+                var page = await catalogClient.GetPageAsync(catalogPageUrl, token);
 
                 foreach (var catalogLeafItem in page.Items.Where(i => i.CommitTimestamp > cursor))
                 {
@@ -88,9 +95,7 @@ namespace BaGet
                 }
 
                 _logger.LogInformation("Processed catalog page {CatalogPageUrl}", catalogPageUrl);
-            });
-
-            return catalogLeafItems;
+            }
         }
 
         private IEnumerable<CatalogLeafItem> DeduplicateCatalogLeafItems(IEnumerable<CatalogLeafItem> catalogLeafItems)
@@ -110,13 +115,16 @@ namespace BaGet
         {
             var work = new ConcurrentBag<CatalogLeafItem>(catalogLeafItems);
 
-            await ProcessInParallel(work, async catalogLeafItem =>
-            {
-                await _leafProcessor.ProcessAsync(catalogLeafItem, cancellationToken);
-            });
+            await ProcessInParallel(
+                work,
+                _leafProcessor.ProcessAsync,
+                cancellationToken);
         }
 
-        private async Task ProcessInParallel<T>(ConcurrentBag<T> allWork, Func<T, Task> worker)
+        private async Task ProcessInParallel<T>(
+            ConcurrentBag<T> allWork,
+            Func<T, CancellationToken, Task> worker,
+            CancellationToken cancellationToken)
         {
              await Task.WhenAll(
                 Enumerable
@@ -125,9 +133,11 @@ namespace BaGet
                     {
                         while (work.TryTake(out var item))
                         {
+                            cancellationToken.ThrowIfCancellationRequested();
+
                             try
                             {
-                                await worker(item);
+                                await worker(item, cancellationToken);
                             }
                             catch (Exception e)
                             {

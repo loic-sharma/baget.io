@@ -28,12 +28,10 @@ namespace BaGet
 
                 return data.Value;
             }
-            catch (StorageException e)
+            catch (StorageException e) when (e.RequestInformation?.HttpStatusCode == 404)
             {
-                // TODO: Check that this is not found exception.
                 return null;
             }
-            throw new NotImplementedException();
         }
 
         public async Task SetAsync(DateTimeOffset value, CancellationToken cancellationToken = default)
