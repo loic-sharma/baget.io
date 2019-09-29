@@ -1,12 +1,14 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using BaGet.Protocol.Models;
+using Microsoft.Azure.ServiceBus;
 using Microsoft.Extensions.Logging;
-using Microsoft.WindowsAzure.Storage.Queue;
 using Newtonsoft.Json;
 
 namespace BaGet
@@ -15,12 +17,12 @@ namespace BaGet
     {
         private const int MaxDegreeOfParallelism = 32;
 
-        private readonly CloudQueue _queue;
+        private readonly IQueueClient _queue;
         private readonly ICatalogLeafItemProcessor _leafProcessor;
         private readonly ILogger<ProcessQueueCommand> _logger;
 
         public ProcessQueueCommand(
-            CloudQueue queue,
+            IQueueClient queue,
             ICatalogLeafItemProcessor leafProcessor,
             ILogger<ProcessQueueCommand> logger)
         {
@@ -36,65 +38,37 @@ namespace BaGet
             ServicePointManager.DefaultConnectionLimit = MaxDegreeOfParallelism;
             ServicePointManager.MaxServicePointIdleTime = 10000;
 
-            var channelOptions = new BoundedChannelOptions(MaxDegreeOfParallelism * 2)
+            var options = new MessageHandlerOptions(ProcessException)
             {
-                FullMode = BoundedChannelFullMode.Wait,
-                SingleWriter = true,
-                SingleReader = false,
+                AutoComplete = true,
+                MaxConcurrentCalls = MaxDegreeOfParallelism,
             };
 
-            var channel = Channel.CreateBounded<CloudQueueMessage>(channelOptions);
+            _queue.RegisterMessageHandler(ProcessMessageAsync, options);
 
-            var receiveTask = ReceiveQueueMessages(channel.Writer, cancellationToken);
-            var processTask = ProcessInParallel(async () =>
-            {
-                while (await channel.Reader.WaitToReadAsync(cancellationToken))
-                {
-                    while (channel.Reader.TryRead(out var message))
-                    {
-                        try
-                        {
-                            var catalogLeafItem = JsonConvert.DeserializeObject<CatalogLeafItem>(message.AsString);
+            // Wait up to a day before shutting down.
+            await Task.Delay(TimeSpan.FromDays(1), cancellationToken);
 
-                            await _leafProcessor.ProcessAsync(catalogLeafItem, cancellationToken);
-                            await _queue.DeleteMessageAsync(message, cancellationToken);
-                        }
-                        catch (Exception e)
-                        {
-                            _logger.LogError(e, "Failed to process message due to exception");
-                        }
-                    }
-                }
-            });
+            _logger.LogInformation("Shutting down...");
 
-            await Task.WhenAll(receiveTask, processTask);
+            await _leafProcessor.CompleteAsync(cancellationToken);
         }
 
-        private async Task ReceiveQueueMessages(ChannelWriter<CloudQueueMessage> channel, CancellationToken cancellationToken)
+        private async Task ProcessMessageAsync(Message message, CancellationToken cancellationToken)
         {
-            while (await channel.WaitToWriteAsync())
-            {
-                var message = await _queue.GetMessageAsync(cancellationToken);
-                if (message == null)
-                {
-                    _logger.LogInformation("Finished processing queue messages");
-                    channel.Complete();
-                    return;
-                }
+            var messageString = Encoding.UTF8.GetString(message.Body);
+            var catalogLeafItem = JsonConvert.DeserializeObject<CatalogLeafItem>(messageString);
 
-                if (!channel.TryWrite(message))
-                {
-                    await channel.WriteAsync(message, cancellationToken);
-                }
-            }
+            await _leafProcessor.ProcessAsync(catalogLeafItem, cancellationToken);
         }
 
-        private static async Task ProcessInParallel(Func<Task> worker)
+        private Task ProcessException(ExceptionReceivedEventArgs exceptionArgs)
         {
-             await Task.WhenAll(
-                Enumerable
-                    .Repeat(worker, MaxDegreeOfParallelism)
-                    .Select(x => x()));
+            _logger.LogError(
+                exceptionArgs.Exception,
+                "Received exception from Service Bus");
+
+            return Task.CompletedTask;
         }
     }
 }

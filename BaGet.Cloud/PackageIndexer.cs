@@ -72,6 +72,7 @@ namespace BaGet
                 "Updating the search service for {PackageId}...",
                 packageId);
 
+            // TODO: https://github.com/loic-sharma/BaGet/issues/362
             //await _searchClient.Documents.IndexAsync(
             //    BuildSearchActions(packageId, packages),
             //    cancellationToken: cancellationToken);

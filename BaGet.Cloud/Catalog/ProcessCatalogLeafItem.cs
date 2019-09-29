@@ -54,6 +54,11 @@ namespace BaGet
             _logger.LogInformation("Processed catalog leaf {CatalogLeafUrl}", catalogLeafItem.CatalogLeafUrl);
         }
 
+        public Task CompleteAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         private async Task ProcessPackageDetailsAsync(
             CatalogLeafItem catalogLeafItem,
             CancellationToken cancellationToken)

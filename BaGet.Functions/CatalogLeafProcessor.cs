@@ -26,6 +26,7 @@ namespace BaGet.Functions
             var leafItem = JsonConvert.DeserializeObject<CatalogLeafItem>(message);
 
             await _leafProcessor.ProcessAsync(leafItem, cancellationToken);
+            await _leafProcessor.CompleteAsync(cancellationToken);
         }
     }
 }

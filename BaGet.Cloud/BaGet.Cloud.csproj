@@ -8,6 +8,6 @@
     <PackageReference Include="BaGet.Azure" Version="0.2.0-master-909" />
     <PackageReference Include="BaGet.Core" Version="0.2.0-master-909" />
     <PackageReference Include="BaGet.Protocol" Version="0.2.0-master-909" />
-    <PackageReference Include="Microsoft.Azure.Storage.Queue" Version="9.4.1" />
+    <PackageReference Include="Microsoft.Azure.ServiceBus" Version="4.0.0" />
   </ItemGroup>
 </Project>

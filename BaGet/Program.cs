@@ -12,13 +12,13 @@ using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
 using Microsoft.Azure.Cosmos.Table;
 using Microsoft.Azure.Search;
+using Microsoft.Azure.ServiceBus;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage.Blob;
-using Microsoft.WindowsAzure.Storage.Queue;
 
 namespace BaGet
 {
@@ -73,14 +73,13 @@ namespace BaGet
                             .CreateCloudTableClient();
                     });
 
-                    services.AddSingleton(provider =>
+                    services.AddSingleton<IQueueClient>(provider =>
                     {
                         var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
-                        var queueClient = CloudStorageAccount
-                            .Parse(config.Value.StorageQueueConnectionString)
-                            .CreateCloudQueueClient();
+                        var builder = new ServiceBusConnectionStringBuilder(
+                            config.Value.ServiceBusConnectionString);
 
-                        return queueClient.GetQueueReference(config.Value.StorageQueueName);
+                        return new QueueClient(builder, ReceiveMode.PeekLock);
                     });
 
                     services.AddSingleton(provider =>
@@ -97,7 +96,7 @@ namespace BaGet
                     {
                         var config = provider.GetRequiredService<IOptionsSnapshot<Configuration>>();
 
-                        // TODO
+                        // TODO https://github.com/loic-sharma/BaGet/issues/362
                         return null;
                     });
 
@@ -106,16 +105,23 @@ namespace BaGet
                     services.AddSingleton<IUrlGenerator, UrlGenerator>();
 
                     services.AddSingleton<ProcessCatalogLeafItem>();
-                    services.AddSingleton<QueueCatalogLeafItem>();
+                    services.AddSingleton<QueueCatalogLeafItems>();
                     services.AddSingleton<PackageIndexer>();
 
                     services.AddSingleton(provider =>
                     {
                         var parseResult = provider.GetRequiredService<ParseResult>();
 
-                        var leafProcessor = parseResult.HasOption("enqueue")
-                            ? (ICatalogLeafItemProcessor)provider.GetRequiredService<QueueCatalogLeafItem>()
-                            : (ICatalogLeafItemProcessor)provider.GetRequiredService<ProcessCatalogLeafItem>();
+                        ICatalogLeafItemBatchProcessor leafProcessor;
+                        if (parseResult.HasOption("enqueue"))
+                        {
+                            leafProcessor = provider.GetRequiredService<QueueCatalogLeafItems>();
+                        }
+                        else
+                        {
+                            leafProcessor = new DefaultCatalogLeafItemBatchProcessor(
+                                provider.GetRequiredService<ProcessCatalogLeafItem>());
+                        }
 
                         var clientFactory = provider.GetRequiredService<NuGetClientFactory>();
                         var cursor = provider.GetRequiredService<ICursor>();
@@ -130,7 +136,7 @@ namespace BaGet
 
                     services.AddSingleton(provider =>
                     {
-                        var queue = provider.GetRequiredService<CloudQueue>();
+                        var queue = provider.GetRequiredService<IQueueClient>();
                         var leafProcessor = provider.GetRequiredService<ProcessCatalogLeafItem>();
                         var logger = provider.GetRequiredService<ILogger<ProcessQueueCommand>>();
 
