@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\baget.io.core\baget.io.core.csproj" />
+    <ProjectReference Include="..\baget.io.core\BaGet.Core.csproj" />
   </ItemGroup>
 
 </Project>
