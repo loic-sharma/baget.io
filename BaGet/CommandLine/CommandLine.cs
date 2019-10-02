@@ -25,7 +25,6 @@ namespace BaGet
             });
 
             rootCommand.Add(BuildProcessCatalogCommand());
-            rootCommand.Add(BuildProcessQueueCommand());
 
             return rootCommand;
         }
@@ -42,28 +41,11 @@ namespace BaGet
             return command;
         }
 
-        private static Command BuildProcessQueueCommand()
-        {
-            var command = new Command("process-queue", "Process enqueued items");
-
-            command.Handler = CommandHandler.Create<IHost, CancellationToken>(ProcessQueueAsync);
-
-            return command;
-        }
-
         public static async Task ProcessCatalogAsync(IHost host, bool enqueue, CancellationToken cancellationToken)
         {
             await host
                 .Services
                 .GetRequiredService<ProcessCatalogCommand>()
-                .RunAsync(cancellationToken);
-        }
-
-        public static async Task ProcessQueueAsync(IHost host, CancellationToken cancellationToken)
-        {
-            await host
-                .Services
-                .GetRequiredService<ProcessQueueCommand>()
                 .RunAsync(cancellationToken);
         }
     }

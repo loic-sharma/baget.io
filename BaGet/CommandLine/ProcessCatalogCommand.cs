@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using BaGet.Protocol;
@@ -34,11 +33,6 @@ namespace BaGet
 
         public async Task RunAsync(CancellationToken cancellationToken = default)
         {
-            // Prepare the processing.
-            ThreadPool.SetMinThreads(ParallelHelper.MaxDegreeOfParallelism, completionPortThreads: 4);
-            ServicePointManager.DefaultConnectionLimit = ParallelHelper.MaxDegreeOfParallelism;
-            ServicePointManager.MaxServicePointIdleTime = 10000;
-
             var cursor = await _cursor.GetAsync(cancellationToken);
             if (cursor == null)
             {
@@ -48,8 +42,7 @@ namespace BaGet
             _logger.LogInformation("Finding catalog leafs comitted after time {Cursor}...", cursor);
 
             var catalogClient = await _clientFactory.CreateCatalogClientAsync(cancellationToken);
-            var catalogIndex = await catalogClient.GetIndexAsync(cancellationToken);
-            var catalogLeafItems = await GetCatalogLeafItems(catalogClient, catalogIndex, cursor.Value, cancellationToken);
+            var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(cursor.Value, _logger, cancellationToken);
 
             catalogLeafItems = DeduplicateCatalogLeafItems(catalogLeafItems);
 
@@ -59,41 +52,6 @@ namespace BaGet
             await _cursor.SetAsync(catalogIndex.CommitTimestamp, cancellationToken);
 
             _logger.LogInformation("Finished processing catalog leafs");
-        }
-
-        private async Task<IEnumerable<CatalogLeafItem>> GetCatalogLeafItems(
-            ICatalogClient catalogClient,
-            CatalogIndex catalogIndex,
-            DateTimeOffset cursor,
-            CancellationToken cancellationToken)
-        {
-            var catalogLeafItems = new ConcurrentBag<CatalogLeafItem>();
-            var catalogPageUrls = new ConcurrentBag<string>(
-                catalogIndex
-                    .Items
-                    .Where(i => i.CommitTimestamp > cursor)
-                    .Select(i => i.CatalogPageUrl));
-
-            await ParallelHelper.ProcessInParallel(
-                catalogPageUrls,
-                ProcessCatalogPageUrlAsync,
-                cancellationToken);
-
-            return catalogLeafItems;
-
-            async Task ProcessCatalogPageUrlAsync(string catalogPageUrl, CancellationToken token)
-            {
-                _logger.LogInformation("Processing catalog page {CatalogPageUrl}...", catalogPageUrl);
-
-                var page = await catalogClient.GetPageAsync(catalogPageUrl, token);
-
-                foreach (var catalogLeafItem in page.Items.Where(i => i.CommitTimestamp > cursor))
-                {
-                    catalogLeafItems.Add(catalogLeafItem);
-                }
-
-                _logger.LogInformation("Processed catalog page {CatalogPageUrl}", catalogPageUrl);
-            }
         }
 
         private IEnumerable<CatalogLeafItem> DeduplicateCatalogLeafItems(IEnumerable<CatalogLeafItem> catalogLeafItems)

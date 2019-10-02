@@ -153,7 +153,8 @@ namespace BaGet
                 return new Message
                 {
                     Body = stream.ToArray(),
-                    ContentType = "application/json;charset=unicode"
+                    Label = "catalog-leaf",
+                    ContentType = "application/json;charset=unicode",
                 };
             }
         }
