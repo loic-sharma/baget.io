@@ -63,7 +63,7 @@ namespace BaGet
             CatalogLeafItem catalogLeafItem,
             CancellationToken cancellationToken)
         {
-            var catalogClient = await _clientFactory.CreateCatalogClientAsync(cancellationToken);
+            var catalogClient = _clientFactory.CreateCatalogClient();
             var catalogLeaf = await catalogClient.GetPackageDetailsLeafAsync(catalogLeafItem.CatalogLeafUrl, cancellationToken);
 
             await IndexPackageAsync(catalogLeaf, cancellationToken);
@@ -89,7 +89,7 @@ namespace BaGet
 
             try
             {
-                var contentClient = await _clientFactory.CreatePackageContentClientAsync(cancellationToken);
+                var contentClient = _clientFactory.CreatePackageContentClient();
                 using (var stream = await contentClient.GetPackageContentStreamOrNullAsync(packageId, packageVersion, cancellationToken))
                 {
                     packageStream = await stream.AsTemporaryFileStreamAsync(cancellationToken);
