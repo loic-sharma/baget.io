@@ -13,16 +13,16 @@ namespace BaGet
     {
         public async static Task<(CatalogIndex, IEnumerable<CatalogLeafItem>)> LoadCatalogAsync(
             this ICatalogClient catalogClient,
-            DateTimeOffset cursor,
+            DateTimeOffset minCursor,
+            DateTimeOffset maxCursor,
             ILogger logger,
             CancellationToken cancellationToken)
         {
             var catalogIndex = await catalogClient.GetIndexAsync(cancellationToken);
 
-            var maxCursor = DateTimeOffset.MaxValue;
             var catalogLeafItems = new ConcurrentBag<CatalogLeafItem>();
             var catalogPageUrls = new ConcurrentBag<CatalogPageItem>(
-                catalogIndex.GetPagesInBounds(cursor, maxCursor));
+                catalogIndex.GetPagesInBounds(minCursor, maxCursor));
 
             await ParallelHelper.ProcessInParallel(
                 catalogPageUrls,
@@ -36,7 +36,7 @@ namespace BaGet
                 logger.LogInformation("Processing catalog page {CatalogPageUrl}...", pageItem.CatalogPageUrl);
 
                 var page = await catalogClient.GetPageAsync(pageItem.CatalogPageUrl, token);
-                var leafs = page.GetLeavesInBounds(cursor, maxCursor, excludeRedundantLeaves: true);
+                var leafs = page.GetLeavesInBounds(minCursor, maxCursor, excludeRedundantLeaves: true);
 
                 foreach (var catalogLeafItem in leafs)
                 {

@@ -25,6 +25,7 @@ namespace BaGet
             });
 
             rootCommand.Add(BuildProcessCatalogCommand());
+            rootCommand.Add(BuildRebuildCommand());
 
             return rootCommand;
         }
@@ -41,11 +42,31 @@ namespace BaGet
             return command;
         }
 
+        private static Command BuildRebuildCommand()
+        {
+            var command = new Command("rebuild", "Rebuild the generated resources")
+            {
+                new Option("--enqueue", "Adds rebuild operations to queue instead of processing directly")
+            };
+
+            command.Handler = CommandHandler.Create<IHost, bool, CancellationToken>(RebuildAsync);
+
+            return command;
+        }
+
         public static async Task ProcessCatalogAsync(IHost host, bool enqueue, CancellationToken cancellationToken)
         {
             await host
                 .Services
                 .GetRequiredService<ProcessCatalogCommand>()
+                .RunAsync(cancellationToken);
+        }
+
+        public static async Task RebuildAsync(IHost host, bool enqueue, CancellationToken cancellationToken)
+        {
+            await host
+                .Services
+                .GetRequiredService<RebuildCommand>()
                 .RunAsync(cancellationToken);
         }
     }

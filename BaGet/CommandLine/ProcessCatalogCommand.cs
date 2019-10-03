@@ -33,16 +33,21 @@ namespace BaGet
 
         public async Task RunAsync(CancellationToken cancellationToken = default)
         {
-            var cursor = await _cursor.GetAsync(cancellationToken);
-            if (cursor == null)
+            var maxCursor = DateTimeOffset.MaxValue;
+            var minCursor = await _cursor.GetAsync(cancellationToken);
+            if (minCursor == null)
             {
-                cursor = DateTimeOffset.MinValue;
+                minCursor = DateTimeOffset.MinValue;
             }
 
-            _logger.LogInformation("Finding catalog leafs comitted after time {Cursor}...", cursor);
+            _logger.LogInformation("Finding catalog leafs comitted after time {Cursor}...", minCursor);
 
             var catalogClient = await _clientFactory.CreateCatalogClientAsync(cancellationToken);
-            var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(cursor.Value, _logger, cancellationToken);
+            var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
+                minCursor.Value,
+                maxCursor,
+                _logger,
+                cancellationToken);
 
             catalogLeafItems = DeduplicateCatalogLeafItems(catalogLeafItems);
 

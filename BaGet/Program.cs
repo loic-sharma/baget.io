@@ -43,6 +43,7 @@ namespace BaGet
 
                         services.Configure<Configuration>(ctx.Configuration);
                         services.AddSingleton<ProcessCatalogCommand>();
+                        services.AddSingleton<RebuildCommand>();
 
                         services.AddSingleton<ICatalogLeafItemBatchProcessor>(provider =>
                         {

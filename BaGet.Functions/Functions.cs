@@ -35,8 +35,9 @@ namespace BaGet.Functions
                     await _leafProcessor.CompleteAsync(cancellationToken);
                     break;
 
-                case "packageId":
-                    await _indexer.BuildAsync(message, cancellationToken);
+                case "rebuild":
+                    var packageId = message;
+                    await _indexer.BuildAsync(packageId, cancellationToken);
                     break;
             }
         }

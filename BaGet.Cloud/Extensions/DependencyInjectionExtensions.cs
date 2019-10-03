@@ -13,9 +13,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace BaGet
 {
-    using System.Threading;
-    using System.Threading.Tasks;
-    using BaGet.Protocol.Models;
+
     using Microsoft.Rest;
     using Newtonsoft.Json;
     using CloudStorageAccount = Microsoft.WindowsAzure.Storage.CloudStorageAccount;
@@ -45,7 +43,7 @@ namespace BaGet
                 var config = provider.GetRequiredService<IOptions<Configuration>>();
 
                 return TableStorageAccount
-                    .Parse(config.Value.TableStorageConnectionString)
+                    .Parse(config.Value.TableStorage.ConnectionString)
                     .CreateCloudTableClient();
             });
 
@@ -53,7 +51,7 @@ namespace BaGet
             {
                 var config = provider.GetRequiredService<IOptions<Configuration>>();
                 var builder = new ServiceBusConnectionStringBuilder(
-                    config.Value.ServiceBusConnectionString);
+                    config.Value.ServiceBus.ConnectionString);
 
                 return new QueueClient(builder, ReceiveMode.PeekLock);
             });
@@ -62,10 +60,10 @@ namespace BaGet
             {
                 var config = provider.GetRequiredService<IOptions<Configuration>>();
                 var blobClient = CloudStorageAccount
-                    .Parse(config.Value.BlobStorageConnectionString)
+                    .Parse(config.Value.BlobStorage.ConnectionString)
                     .CreateCloudBlobClient();
 
-                return blobClient.GetContainerReference(config.Value.BlobContainerName);
+                return blobClient.GetContainerReference(config.Value.BlobStorage.ContainerName);
             });
 
             services.AddSingleton<ISearchIndexClient>(provider =>
@@ -82,6 +80,7 @@ namespace BaGet
 
             services.AddSingleton<ProcessCatalogLeafItem>();
             services.AddSingleton<QueueCatalogLeafItems>();
+            services.AddSingleton<BatchQueueClient>();
             services.AddSingleton<PackageIndexer>();
 
             return services;
