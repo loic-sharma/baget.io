@@ -17,12 +17,19 @@ namespace BaGet.Functions
                 config.BlobStorage = new BlobStorageConfiguration
                 {
                     ConnectionString = Config("BlobStorageConnectionString"),
-                    ContainerName = Config("BlobContainerName")
+                    ContainerName = Config("BlobContainerName"),
                 };
 
                 config.TableStorage = new ConnectionStringConfiguration
                 {
-                    ConnectionString = Config("TableStorageConnectionString")
+                    ConnectionString = Config("TableStorageConnectionString"),
+                };
+
+                config.Search = new SearchConfiguration
+                {
+                    ServiceName = Config("SearchServiceName"),
+                    IndexName = Config("SearchIndexName"),
+                    ApiKey = Config("SearchApiKey"),
                 };
             });
 

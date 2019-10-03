@@ -70,8 +70,10 @@ namespace BaGet
             {
                 var config = provider.GetRequiredService<IOptions<Configuration>>();
 
-                // TODO https://github.com/loic-sharma/BaGet/issues/362
-                return new FakeSearchIndexClient();
+                return new SearchIndexClient(
+                    config.Value.Search.ServiceName,
+                    config.Value.Search.IndexName,
+                    new SearchCredentials(config.Value.Search.ApiKey));
             });
 
             services.AddSingleton<IPackageService, TablePackageService>();
@@ -85,41 +87,5 @@ namespace BaGet
 
             return services;
         }
-
-        // Work around for Azure Functions silliness
-        internal class FakeSearchIndexClient : ISearchIndexClient
-        {
-            public SearchCredentials SearchCredentials => throw new System.NotImplementedException();
-
-            public bool UseHttpGetForQueries { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
-
-            public JsonSerializerSettings SerializationSettings => throw new System.NotImplementedException();
-
-            public JsonSerializerSettings DeserializationSettings => throw new System.NotImplementedException();
-
-            public ServiceClientCredentials Credentials => throw new System.NotImplementedException();
-
-            public string ApiVersion => throw new System.NotImplementedException();
-
-            public string SearchServiceName { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
-            public string SearchDnsSuffix { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
-            public string IndexName { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
-            public string AcceptLanguage { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
-            public int? LongRunningOperationRetryTimeout { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
-            public bool? GenerateClientRequestId { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
-
-            public IDocumentsOperations Documents => throw new System.NotImplementedException();
-
-            public void Dispose()
-            {
-                throw new System.NotImplementedException();
-            }
-
-            public void TargetDifferentIndex(string newIndexName)
-            {
-                throw new System.NotImplementedException();
-            }
-        }
-
     }
 }
