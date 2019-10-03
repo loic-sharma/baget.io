@@ -13,9 +13,17 @@ namespace BaGet.Functions
             builder.Services.Configure<Configuration>(config =>
             {
                 config.RootUrl = Config("RootUrl");
-                config.BlobStorageConnectionString = Config("BlobStorageConnectionString");
-                config.BlobContainerName = Config("BlobContainerName");
-                config.TableStorageConnectionString = Config("TableStorageConnectionString");
+
+                config.BlobStorage = new BlobStorageConfiguration
+                {
+                    ConnectionString = Config("BlobStorageConnectionString"),
+                    ContainerName = Config("BlobContainerName")
+                };
+
+                config.TableStorage = new ConnectionStringConfiguration
+                {
+                    ConnectionString = Config("TableStorageConnectionString")
+                };
             });
 
             builder.Services.AddBaGet();
