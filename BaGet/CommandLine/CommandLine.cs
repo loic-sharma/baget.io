@@ -19,46 +19,74 @@ namespace BaGet
         {
             var rootCommand = new RootCommand();
 
-            rootCommand.Handler = CommandHandler.Create((IHelpBuilder help) =>
-            {
-                help.Write(rootCommand);
-            });
+            rootCommand.Handler = CommandHandler.Create<IHelpBuilder>(
+                help => help.Write(rootCommand));
 
-            rootCommand.Add(BuildProcessCatalogCommand());
-            rootCommand.Add(BuildRebuildCommand());
+            rootCommand.Add(ImportCommand());
+            rootCommand.Add(RebuildCommand());
 
             return rootCommand;
-        }
 
-        private static Command BuildProcessCatalogCommand()
-        {
-            var command = new Command("process-catalog", "Process the NuGet Catalog V3 resource")
+            Command ImportCommand()
             {
-                new Option("--enqueue", "Adds catalog leafs to queue instead of processing directly")
-            };
+                var command = new Command("import", "Import data from NuGet.org");
 
-            command.Handler = CommandHandler.Create<IHost, bool, CancellationToken>(ProcessCatalogAsync);
+                command.Handler = CommandHandler.Create<IHelpBuilder>(
+                    help => help.Write(command));
 
-            return command;
-        }
+                command.Add(ImportCatalogCommand());
+                command.Add(ImportDownloadsCommand());
 
-        private static Command BuildRebuildCommand()
-        {
-            var command = new Command("rebuild", "Rebuild the generated resources")
+                return command;
+            }
+
+            Command ImportCatalogCommand()
             {
-                new Option("--enqueue", "Adds rebuild operations to queue instead of processing directly")
-            };
+                var command = new Command("catalog", "Import packages from NuGet.org using the V3 Catalog resource")
+                {
+                    new Option("--enqueue", "Adds catalog leafs to queue instead of processing directly")
+                };
 
-            command.Handler = CommandHandler.Create<IHost, bool, CancellationToken>(RebuildAsync);
+                command.Handler = CommandHandler.Create<IHost, bool, CancellationToken>(ImportCatalogAsync);
 
-            return command;
+                return command;
+            }
+
+            Command ImportDownloadsCommand()
+            {
+                var command = new Command("downloads", "Import package downloads from NuGet.org");
+
+                command.Handler = CommandHandler.Create<IHost, CancellationToken>(ImportDownloadsAsync);
+
+                return command;
+            }
+
+            Command RebuildCommand()
+            {
+                var command = new Command("rebuild", "Rebuild the generated resources")
+                {
+                    new Option("--enqueue", "Adds rebuild operations to queue instead of processing directly")
+                };
+
+                command.Handler = CommandHandler.Create<IHost, bool, CancellationToken>(RebuildAsync);
+
+                return command;
+            }
         }
 
-        public static async Task ProcessCatalogAsync(IHost host, bool enqueue, CancellationToken cancellationToken)
+        public static async Task ImportCatalogAsync(IHost host, bool enqueue, CancellationToken cancellationToken)
         {
             await host
                 .Services
-                .GetRequiredService<ProcessCatalogCommand>()
+                .GetRequiredService<ImportCatalogCommand>()
+                .RunAsync(cancellationToken);
+        }
+
+        public static async Task ImportDownloadsAsync(IHost host, CancellationToken cancellationToken)
+        {
+            await host
+                .Services
+                .GetRequiredService<ImportDownloadsCommand>()
                 .RunAsync(cancellationToken);
         }
 

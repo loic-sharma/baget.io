@@ -42,7 +42,8 @@ namespace BaGet
                         services.AddBaGet();
 
                         services.Configure<Configuration>(ctx.Configuration);
-                        services.AddSingleton<ProcessCatalogCommand>();
+                        services.AddSingleton<ImportCatalogCommand>();
+                        services.AddSingleton<ImportDownloadsCommand>();
                         services.AddSingleton<RebuildCommand>();
 
                         services.AddSingleton<ICatalogLeafItemBatchProcessor>(provider =>

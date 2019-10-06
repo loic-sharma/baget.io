@@ -13,9 +13,6 @@ using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace BaGet
 {
-
-    using Microsoft.Rest;
-    using Newtonsoft.Json;
     using CloudStorageAccount = Microsoft.WindowsAzure.Storage.CloudStorageAccount;
     using TableStorageAccount = Microsoft.Azure.Cosmos.Table.CloudStorageAccount;
 
@@ -79,11 +76,13 @@ namespace BaGet
             services.AddSingleton<IPackageService, TablePackageService>();
             services.AddSingleton<ICursor, BlobCursor>();
             services.AddSingleton<IUrlGenerator, UrlGenerator>();
+            services.AddSingleton<IPackageDownloadsSource, PackageDownloadsJsonSource>();
 
             services.AddSingleton<ProcessCatalogLeafItem>();
             services.AddSingleton<QueueCatalogLeafItems>();
             services.AddSingleton<BatchQueueClient>();
             services.AddSingleton<PackageIndexer>();
+
 
             return services;
         }
