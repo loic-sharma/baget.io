@@ -73,6 +73,15 @@ namespace BaGet
                     new SearchCredentials(config.Value.Search.ApiKey));
             });
 
+            services.AddSingleton<ISearchServiceClient>(provider =>
+            {
+                var config = provider.GetRequiredService<IOptions<Configuration>>();
+
+                return new SearchServiceClient(
+                    config.Value.Search.ServiceName,
+                    new SearchCredentials(config.Value.Search.ApiKey));
+            });
+
             services.AddSingleton<IPackageService, TablePackageService>();
             services.AddSingleton<ICursor, BlobCursor>();
             services.AddSingleton<IUrlGenerator, UrlGenerator>();

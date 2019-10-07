@@ -54,6 +54,7 @@ namespace BaGet
                 .ToList();
 
             await _queue.SendAsync(messages, cancellationToken);
+            await _queue.CompleteAsync(cancellationToken);
         }
 
         private Message ToMessage(string packageId)

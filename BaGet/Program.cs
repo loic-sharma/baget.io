@@ -42,6 +42,8 @@ namespace BaGet
                         services.AddBaGet();
 
                         services.Configure<Configuration>(ctx.Configuration);
+
+                        services.AddSingleton<CreateAzureSearchIndexCommand>();
                         services.AddSingleton<ImportCatalogCommand>();
                         services.AddSingleton<ImportDownloadsCommand>();
                         services.AddSingleton<RebuildCommand>();

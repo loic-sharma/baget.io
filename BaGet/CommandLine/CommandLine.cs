@@ -22,10 +22,20 @@ namespace BaGet
             rootCommand.Handler = CommandHandler.Create<IHelpBuilder>(
                 help => help.Write(rootCommand));
 
+            rootCommand.Add(CreateSearchIndexCommand());
             rootCommand.Add(ImportCommand());
             rootCommand.Add(RebuildCommand());
 
             return rootCommand;
+
+            Command CreateSearchIndexCommand()
+            {
+                var command = new Command("create-search-index", "Create an Azure Search index");
+
+                command.Handler = CommandHandler.Create<IHost, CancellationToken>(CreateAzureSearchIndexAsync);
+
+                return command;
+            }
 
             Command ImportCommand()
             {
@@ -72,6 +82,14 @@ namespace BaGet
 
                 return command;
             }
+        }
+
+        public static async Task CreateAzureSearchIndexAsync(IHost host, CancellationToken cancellationToken)
+        {
+            await host
+                .Services
+                .GetRequiredService<CreateAzureSearchIndexCommand>()
+                .RunAsync(cancellationToken);
         }
 
         public static async Task ImportCatalogAsync(IHost host, bool enqueue, CancellationToken cancellationToken)

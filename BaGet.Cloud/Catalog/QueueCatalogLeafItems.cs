@@ -49,6 +49,8 @@ namespace BaGet
             {
                 await _queue.SendAsync(messages, cancellationToken);
             }
+
+            await _queue.CompleteAsync(cancellationToken);
         }
 
         private ConcurrentBag<IReadOnlyList<Message>> SplitMessages(IReadOnlyList<Message> messages)
