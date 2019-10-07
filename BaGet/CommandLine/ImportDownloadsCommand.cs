@@ -19,6 +19,7 @@ namespace BaGet
         // TODO: Share with BaGet.Azure?
         private const string TableName = "Packages";
         private const int MaxTableOperations = 100;
+
         private readonly NuGetClientFactory _clientFactory;
         private readonly ICursor _cursor;
         private readonly IPackageDownloadsSource _downloads;
