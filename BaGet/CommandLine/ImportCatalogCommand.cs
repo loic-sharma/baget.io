@@ -12,18 +12,18 @@ using NuGet.Packaging.Core;
 
 namespace BaGet
 {
-    public class ProcessCatalogCommand
+    public class ImportCatalogCommand
     {
         private readonly NuGetClientFactory _clientFactory;
         private readonly ICatalogLeafItemBatchProcessor _leafProcessor;
         private readonly ICursor _cursor;
-        private readonly ILogger<ProcessCatalogCommand> _logger;
+        private readonly ILogger<ImportCatalogCommand> _logger;
 
-        public ProcessCatalogCommand(
+        public ImportCatalogCommand(
             NuGetClientFactory clientFactory,
             ICatalogLeafItemBatchProcessor leafProcessor,
             ICursor cursor,
-            ILogger<ProcessCatalogCommand> logger)
+            ILogger<ImportCatalogCommand> logger)
         {
             _clientFactory = clientFactory;
             _leafProcessor = leafProcessor;
@@ -51,12 +51,12 @@ namespace BaGet
 
             catalogLeafItems = DeduplicateCatalogLeafItems(catalogLeafItems);
 
-            _logger.LogInformation("Processing {CatalogLeafs} catalog leafs...", catalogLeafItems.Count());
+            _logger.LogInformation("Importing {CatalogLeafs} catalog leafs...", catalogLeafItems.Count());
 
             await _leafProcessor.ProcessAsync(catalogLeafItems, cancellationToken);
             await _cursor.SetAsync(catalogIndex.CommitTimestamp, cancellationToken);
 
-            _logger.LogInformation("Finished processing catalog leafs");
+            _logger.LogInformation("Finished importing catalog leafs");
         }
 
         private IEnumerable<CatalogLeafItem> DeduplicateCatalogLeafItems(IEnumerable<CatalogLeafItem> catalogLeafItems)
