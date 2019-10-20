@@ -65,6 +65,7 @@ namespace BaGet
                 .Select(g => g.OrderByDescending(l => l.CommitTimestamp).First())
                 .Where(l => l.IsPackageDetails())
                 .Select(l => l.PackageId)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             _logger.LogInformation("Processing {PackageCount} packages", packageIds.Count);
