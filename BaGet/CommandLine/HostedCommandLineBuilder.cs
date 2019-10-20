@@ -25,31 +25,24 @@ namespace BaGet
             return CommandHandler.Create<IHelpBuilder>(help => help.Write(command));
         }
 
+        public HostedCommandLineBuilder Configure<TOptions>(
+            Action<ParseResult, TOptions> configureOptions)
+            where TOptions : class
+        {
+            _serviceConfigurations.Add(services =>
+            {
+                services.Configure(configureOptions);
+            });
+
+            return this;
+        }
+
         public ICommandHandler BuildHandler<TCommand>()
             where TCommand : class, ICommand
         {
             _serviceConfigurations.Add(services =>
             {
                 services.AddSingleton<TCommand>();
-            });
-
-            return CommandHandler.Create<IHost, CancellationToken>(async (host, cancellationToken) =>
-            {
-                var command = host.Services.GetRequiredService<TCommand>();
-
-                await command.RunAsync(cancellationToken);
-            });
-        }
-
-        public ICommandHandler BuildHandler<TCommand, TOptions>(
-            Action<ParseResult, TOptions> configureOptions)
-            where TCommand : class, ICommand
-            where TOptions : class
-        {
-            _serviceConfigurations.Add(services =>
-            {
-                services.AddSingleton<TCommand>();
-                services.Configure(configureOptions);
             });
 
             return CommandHandler.Create<IHost, CancellationToken>(async (host, cancellationToken) =>

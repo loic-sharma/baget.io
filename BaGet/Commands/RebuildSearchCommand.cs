@@ -58,6 +58,8 @@ namespace BaGet
                 _logger,
                 cancellationToken);
 
+            _logger.LogInformation("Deduplicating catalog leafs...");
+
             var packageIds = catalogLeafItems
                 .GroupBy(l => new PackageIdentity(l.PackageId, l.ParsePackageVersion()))
                 .Select(g => g.OrderByDescending(l => l.CommitTimestamp).First())
@@ -74,7 +76,7 @@ namespace BaGet
                 SingleReader = false,
             });
 
-            var produceTask = ProducePackageRegistrationsAsync(
+            var produceTask = ProduceIndexActionsAsync(
                 channel.Writer,
                 new ConcurrentBag<string>(packageIds),
                 cancellationToken);
@@ -90,39 +92,45 @@ namespace BaGet
             _logger.LogInformation("Finished rebuilding search");
         }
 
-        private async Task ProducePackageRegistrationsAsync(
+        private async Task ProduceIndexActionsAsync(
             ChannelWriter<IndexAction<KeyedDocument>> channel,
             ConcurrentBag<string> packageIds,
             CancellationToken cancellationToken)
         {
             await ParallelHelper.ProcessInParallel(
                 packageIds,
-                async (packageId, c) =>
-                {
-                    _logger.LogInformation("Adding package {PackageId}...", packageId);
-
-                    var packages = await _packages.FindAsync(packageId, includeUnlisted: false);
-                    if (packages.Count == 0)
-                    {
-                        _logger.LogWarning(
-                            "Could not find any packages named {PackageId}, skipping...",
-                            packageId);
-                        return;
-                    }
-
-                    var registration = new PackageRegistration(
-                        packageId,
-                        packages);
-
-                    foreach (var action in _actionBuilder.AddPackage(registration))
-                    {
-                        if (!channel.TryWrite(action))
-                        {
-                            await channel.WriteAsync(action);
-                        }
-                    }
-                },
+                ProduceIndexActionsAsync,
                 cancellationToken);
+
+            _logger.LogInformation("Finished producing index actions");
+            channel.Complete();
+            return;
+
+            async Task ProduceIndexActionsAsync(string packageId, CancellationToken cancellationToken1)
+            {
+                _logger.LogInformation("Adding package {PackageId}...", packageId);
+
+                var packages = await _packages.FindAsync(packageId, includeUnlisted: false);
+                if (packages.Count == 0)
+                {
+                    _logger.LogWarning(
+                        "Could not find any packages named {PackageId}, skipping...",
+                        packageId);
+                    return;
+                }
+
+                var registration = new PackageRegistration(
+                    packageId,
+                    packages);
+
+                foreach (var action in _actionBuilder.AddPackage(registration))
+                {
+                    if (!channel.TryWrite(action))
+                    {
+                        await channel.WriteAsync(action);
+                    }
+                }
+            }
         }
 
         private async Task ConsumePackageRegistrationsAsync(
@@ -141,6 +149,8 @@ namespace BaGet
             }
 
             await indexer.PushBatchesAsync(cancellationToken);
+
+            _logger.LogInformation("Finished consuming index actions");
         }
     }
 }

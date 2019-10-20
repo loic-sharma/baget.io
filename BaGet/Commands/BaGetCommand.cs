@@ -32,7 +32,6 @@ namespace BaGet
                 {
                     var addCommand = new Command("add", "Add packages.");
 
-                    addCommand.Handler = builder.BuildHandler<AddPackagesCommand, AddPackagesOptions>(ConfigureAddPackages);
                     addCommand
                         .AddOptionalArgument<string>("packageId", argument =>
                         {
@@ -55,6 +54,10 @@ namespace BaGet
                             option.Description = "Add work to queue instead of processing directly.";
                         });
 
+                    addCommand.Handler = builder
+                        .Configure<AddPackagesOptions>(ConfigureAddPackages)
+                        .BuildHandler<AddPackagesCommand>();
+
                     return addCommand;
 
                     void ConfigureAddPackages(ParseResult parseResult, AddPackagesOptions options)
@@ -75,7 +78,6 @@ namespace BaGet
                 {
                     var updateCommand = new Command("update", "Update packages using metadata from nuget.org.");
 
-                    updateCommand.Handler = builder.BuildHandler<UpdatePackagesCommand, UpdatePackagesOptions>(ConfigureUpdatePackages);
                     updateCommand
                         .AddOptionalArgument<string>("packageId", argument =>
                         {
@@ -97,6 +99,10 @@ namespace BaGet
                             option.AddAlias("-o");
                             option.Description = "Update package owners.";
                         });
+
+                    updateCommand.Handler = builder
+                        .Configure<UpdatePackagesOptions>(ConfigureUpdatePackages)
+                        .BuildHandler<UpdatePackagesCommand>();
 
                     return updateCommand;
 
@@ -124,16 +130,17 @@ namespace BaGet
 
                 Command RebuildV3Command()
                 {
-                    var rebuildCommand = new Command("rebuild", "Rebuild the static V3 resources.")
-                    {
-                        Handler = builder.BuildHandler<RebuildV3Command, RebuildV3Options>(ConfigureRebuildV3)
-                    };
+                    var rebuildCommand = new Command("rebuild", "Rebuild the static V3 resources.");
 
                     rebuildCommand.AddOption("--enqueue", option =>
                     {
                         option.AddAlias("-q");
                         option.Description = "Add work to queue instead of processing directly.";
                     });
+
+                    rebuildCommand.Handler = builder
+                        .Configure<RebuildV3Options>(ConfigureRebuildV3)
+                        .BuildHandler<RebuildV3Command>();
 
                     return rebuildCommand;
 
@@ -157,13 +164,12 @@ namespace BaGet
 
                 Command CreateSearchCommand()
                 {
-                    var createCommand = new Command("create", "Create the Azure Search index.")
-                    {
-                        Handler = builder.BuildHandler<CreateSearchCommand, CreateSearchOptions>(
-                            ConfigureCreateSearch)
-                    };
+                    var createCommand = new Command("create", "Create the Azure Search index.");
 
                     createCommand.AddOption(new Option("--replace", "Delete an Azure Search index if it exists already."));
+                    createCommand.Handler = builder
+                        .Configure<CreateSearchOptions>(ConfigureCreateSearch)
+                        .BuildHandler<CreateSearchCommand>();
 
                     return createCommand;
 
