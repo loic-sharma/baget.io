@@ -10,18 +10,18 @@ using Microsoft.Extensions.Logging;
 
 namespace BaGet
 {
-    public class RebuildCommand
+    public class RebuildV3Command : ICommand
     {
         private readonly NuGetClientFactory _clientFactory;
         private readonly BatchQueueClient _queue;
         private readonly ICursor _cursor;
-        private readonly ILogger<RebuildCommand> _logger;
+        private readonly ILogger<RebuildV3Command> _logger;
 
-        public RebuildCommand(
+        public RebuildV3Command(
             NuGetClientFactory clientFactory,
             BatchQueueClient queue,
             ICursor cursor,
-            ILogger<RebuildCommand> logger)
+            ILogger<RebuildV3Command> logger)
         {
             _clientFactory = clientFactory;
             _queue = queue;
@@ -35,12 +35,12 @@ namespace BaGet
             var maxCursor = await _cursor.GetAsync(cancellationToken);
             if (maxCursor == null)
             {
-                maxCursor = DateTimeOffset.MaxValue;
+                maxCursor = DateTimeOffset.MinValue;
             }
 
             _logger.LogInformation("Finding catalog leafs comitted before time {Cursor}...", maxCursor);
 
-            var catalogClient = await _clientFactory.CreateCatalogClientAsync(cancellationToken);
+            var catalogClient = _clientFactory.CreateCatalogClient();
             var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
                 minCursor,
                 maxCursor.Value,

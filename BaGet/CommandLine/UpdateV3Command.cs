@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -12,18 +11,18 @@ using NuGet.Packaging.Core;
 
 namespace BaGet
 {
-    public class ProcessCatalogCommand
+    public class UpdateV3Command : ICommand
     {
         private readonly NuGetClientFactory _clientFactory;
         private readonly ICatalogLeafItemBatchProcessor _leafProcessor;
         private readonly ICursor _cursor;
-        private readonly ILogger<ProcessCatalogCommand> _logger;
+        private readonly ILogger<UpdateV3Command> _logger;
 
-        public ProcessCatalogCommand(
+        public UpdateV3Command(
             NuGetClientFactory clientFactory,
             ICatalogLeafItemBatchProcessor leafProcessor,
             ICursor cursor,
-            ILogger<ProcessCatalogCommand> logger)
+            ILogger<UpdateV3Command> logger)
         {
             _clientFactory = clientFactory;
             _leafProcessor = leafProcessor;
@@ -42,7 +41,7 @@ namespace BaGet
 
             _logger.LogInformation("Finding catalog leafs comitted after time {Cursor}...", minCursor);
 
-            var catalogClient = await _clientFactory.CreateCatalogClientAsync(cancellationToken);
+            var catalogClient = _clientFactory.CreateCatalogClient();
             var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
                 minCursor.Value,
                 maxCursor,

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using BaGet.Azure;
+using BaGet.Azure.Search;
 using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
@@ -13,9 +14,6 @@ using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace BaGet
 {
-
-    using Microsoft.Rest;
-    using Newtonsoft.Json;
     using CloudStorageAccount = Microsoft.WindowsAzure.Storage.CloudStorageAccount;
     using TableStorageAccount = Microsoft.Azure.Cosmos.Table.CloudStorageAccount;
 
@@ -76,6 +74,17 @@ namespace BaGet
                     new SearchCredentials(config.Value.Search.ApiKey));
             });
 
+            // TODO: Move BaGet to ISearchServiceClient and remove this line:
+            services.AddSingleton<ISearchServiceClient>(p => p.GetRequiredService<SearchServiceClient>());
+            services.AddSingleton(provider =>
+            {
+                var config = provider.GetRequiredService<IOptions<Configuration>>();
+
+                return new SearchServiceClient(
+                    config.Value.Search.ServiceName,
+                    new SearchCredentials(config.Value.Search.ApiKey));
+            });
+
             services.AddSingleton<IPackageService, TablePackageService>();
             services.AddSingleton<ICursor, BlobCursor>();
             services.AddSingleton<IUrlGenerator, UrlGenerator>();
@@ -84,6 +93,9 @@ namespace BaGet
             services.AddSingleton<QueueCatalogLeafItems>();
             services.AddSingleton<BatchQueueClient>();
             services.AddSingleton<PackageIndexer>();
+
+            services.AddSingleton<AzureSearchBatchIndexer>();
+            services.AddSingleton<IndexActionBuilder>();
 
             return services;
         }
