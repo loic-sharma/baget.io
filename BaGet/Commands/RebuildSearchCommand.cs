@@ -66,7 +66,7 @@ namespace BaGet
 
             _logger.LogInformation("Processing {PackageCount} packages", packageIds.Count);
 
-            var channel = Channel.CreateBounded<PackageRegistration>(new BoundedChannelOptions(1500)
+            var channel = Channel.CreateBounded<PackageRegistration>(new BoundedChannelOptions(5000)
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleWriter = false,

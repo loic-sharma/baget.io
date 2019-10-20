@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BaGet
 {
@@ -21,7 +22,9 @@ namespace BaGet
             ServicePointManager.DefaultConnectionLimit = ParallelHelper.MaxDegreeOfParallelism;
             ServicePointManager.MaxServicePointIdleTime = 10000;
 
-            var parser = CommandLine.Create()
+            var appBuilder = BaGetCommand.Create();
+
+            var parser = appBuilder
                 .UseDefaults()
                 .UseHost(host =>
                 {
@@ -40,25 +43,28 @@ namespace BaGet
                     host.ConfigureServices((ctx, services) =>
                     {
                         services.AddBaGet();
-
+                        services.AddCommands(appBuilder);
                         services.Configure<Configuration>(ctx.Configuration);
-                        services.AddSingleton<UpdateV3Command>();
-                        services.AddSingleton<RebuildV3Command>();
-                        services.AddSingleton<CreateSearchCommand>();
-                        services.AddSingleton<RebuildSearchCommand>();
 
-                        services.AddSingleton<ICatalogLeafItemBatchProcessor>(provider =>
+                        services.AddSingleton(provider =>
                         {
-                            var parseResult = provider.GetRequiredService<ParseResult>();
-
-                            if (parseResult.HasOption("enqueue"))
-                            {
-                                return provider.GetRequiredService<QueueCatalogLeafItems>();
-                            }
-
                             var leafProcesor = provider.GetRequiredService<ProcessCatalogLeafItem>();
 
                             return new DefaultCatalogLeafItemBatchProcessor(leafProcesor);
+                        });
+
+                        services.AddSingleton<ICatalogLeafItemBatchProcessor>(provider =>
+                        {
+                            var options = provider.GetRequiredService<IOptions<AddPackagesOptions>>();
+
+                            if (options.Value.Enqueue)
+                            {
+                                return provider.GetRequiredService<QueueCatalogLeafItems>();
+                            }
+                            else
+                            {
+                                return provider.GetRequiredService<DefaultCatalogLeafItemBatchProcessor>();
+                            }
                         });
                     });
                 })

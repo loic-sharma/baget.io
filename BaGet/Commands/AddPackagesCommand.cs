@@ -7,31 +7,41 @@ using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
 using BaGet.Protocol.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NuGet.Packaging.Core;
 
 namespace BaGet
 {
-    public class UpdateV3Command : ICommand
+    public class AddPackagesCommand : ICommand
     {
         private readonly NuGetClientFactory _clientFactory;
         private readonly ICatalogLeafItemBatchProcessor _leafProcessor;
         private readonly ICursor _cursor;
-        private readonly ILogger<UpdateV3Command> _logger;
+        private readonly IOptions<AddPackagesOptions> _options;
+        private readonly ILogger<AddPackagesCommand> _logger;
 
-        public UpdateV3Command(
+        public AddPackagesCommand(
             NuGetClientFactory clientFactory,
             ICatalogLeafItemBatchProcessor leafProcessor,
             ICursor cursor,
-            ILogger<UpdateV3Command> logger)
+            IOptions<AddPackagesOptions> options,
+            ILogger<AddPackagesCommand> logger)
         {
             _clientFactory = clientFactory;
             _leafProcessor = leafProcessor;
             _cursor = cursor;
+            _options = options;
             _logger = logger;
         }
 
         public async Task RunAsync(CancellationToken cancellationToken = default)
         {
+            if (_options.Value.PackageId != null)
+            {
+                _logger.LogError("Adding individual packages is not supported at this time");
+                return;
+            }
+
             var maxCursor = DateTimeOffset.MaxValue;
             var minCursor = await _cursor.GetAsync(cancellationToken);
             if (minCursor == null)
