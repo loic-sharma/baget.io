@@ -74,18 +74,21 @@ namespace BaGet
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleWriter = false,
-                SingleReader = true,
+                SingleReader = false,
             });
 
             var produceTask = ProduceIndexActionsAsync(
                 channel.Writer,
                 new ConcurrentBag<string>(packageIds),
                 cancellationToken);
-            var consumeTask = ConsumePackageRegistrationsAsync(
+            var consumeTask1 = ConsumeIndexActionsAsync(
+                channel.Reader,
+                cancellationToken);
+            var consumeTask2 = ConsumeIndexActionsAsync(
                 channel.Reader,
                 cancellationToken);
 
-            await Task.WhenAll(produceTask, consumeTask);
+            await Task.WhenAll(produceTask, consumeTask1, consumeTask2);
 
             _logger.LogInformation("Finished rebuilding search");
         }
@@ -131,20 +134,30 @@ namespace BaGet
             }
         }
 
-        private async Task ConsumePackageRegistrationsAsync(
+        private async Task ConsumeIndexActionsAsync(
             ChannelReader<IndexAction<KeyedDocument>> channel,
             CancellationToken cancellationToken)
         {
+            var actions = new List<IndexAction<KeyedDocument>>();
+
             while (await channel.WaitToReadAsync(cancellationToken))
             {
                 while (channel.TryRead(out var action))
                 {
-                    await _indexer.EnqueueIndexActionAsync(action, cancellationToken);
-                    await _indexer.PushBatchesAsync(onlyFull: true, cancellationToken);
+                    actions.Add(action);
+
+                    if (actions.Count >= 1000)
+                    {
+                        await _indexer.IndexAsync(actions, cancellationToken);
+                        actions.Clear();
+                    }
                 }
             }
 
-            await _indexer.PushBatchesAsync(cancellationToken);
+            if (actions.Any())
+            {
+                await _indexer.IndexAsync(actions, cancellationToken);
+            }
 
             _logger.LogInformation("Finished consuming index actions");
         }

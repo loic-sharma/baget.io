@@ -5,9 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BaGet.Azure" Version="0.2.0-loshar-rebuild-azs-1021" />
-    <PackageReference Include="BaGet.Core" Version="0.2.0-loshar-rebuild-azs-1021" />
-    <PackageReference Include="BaGet.Protocol" Version="0.2.0-loshar-rebuild-azs-1021" />
+    <PackageReference Include="BaGet.Azure" Version="0.2.0-loshar-rebuild-azs-1026" />
+    <PackageReference Include="BaGet.Core" Version="0.2.0-loshar-rebuild-azs-1026" />
+    <PackageReference Include="BaGet.Protocol" Version="0.2.0-loshar-rebuild-azs-1026" />
     <PackageReference Include="Microsoft.Azure.ServiceBus" Version="4.0.0" />
   </ItemGroup>
 </Project>
