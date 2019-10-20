@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Net.Http;
 using BaGet.Azure;
@@ -94,7 +95,11 @@ namespace BaGet
             services.AddSingleton<BatchQueueClient>();
             services.AddSingleton<PackageIndexer>();
 
-            services.AddSingleton<AzureSearchBatchIndexer>();
+            services.AddSingleton<Func<AzureSearchBatchIndexer>>(provider =>
+            {
+                return () => provider.GetRequiredService<AzureSearchBatchIndexer>();
+            });
+
             services.AddSingleton<IndexActionBuilder>();
 
             return services;

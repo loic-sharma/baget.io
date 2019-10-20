@@ -9,6 +9,7 @@ using BaGet.Azure.Search;
 using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
+using Microsoft.Azure.Search.Models;
 using Microsoft.Extensions.Logging;
 using NuGet.Packaging.Core;
 
@@ -20,7 +21,7 @@ namespace BaGet
         private readonly ICursor _cursor;
         private readonly IPackageService _packages;
         private readonly IndexActionBuilder _actionBuilder;
-        private readonly AzureSearchBatchIndexer _indexer;
+        private readonly Func<AzureSearchBatchIndexer> _indexerFactory;
         private readonly ILogger<RebuildSearchCommand> _logger;
 
         public RebuildSearchCommand(
@@ -28,14 +29,14 @@ namespace BaGet
             ICursor cursor,
             IPackageService packages,
             IndexActionBuilder actionBuilder,
-            AzureSearchBatchIndexer indexer,
+            Func<AzureSearchBatchIndexer> indexerFactory,
             ILogger<RebuildSearchCommand> logger)
         {
             _clientFactory = clientFactory;
             _cursor = cursor;
             _packages = packages;
             _actionBuilder = actionBuilder;
-            _indexer = indexer;
+            _indexerFactory = indexerFactory;
             _logger = logger;
         }
 
@@ -66,28 +67,31 @@ namespace BaGet
 
             _logger.LogInformation("Processing {PackageCount} packages", packageIds.Count);
 
-            var channel = Channel.CreateBounded<PackageRegistration>(new BoundedChannelOptions(5000)
+            var channel = Channel.CreateBounded<IndexAction<KeyedDocument>>(new BoundedChannelOptions(5000)
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleWriter = false,
-                SingleReader = true
+                SingleReader = false,
             });
 
             var produceTask = ProducePackageRegistrationsAsync(
                 channel.Writer,
                 new ConcurrentBag<string>(packageIds),
                 cancellationToken);
-            var consumeTask = ConsumePackageRegistrationsAsync(
+            var consumeTask1 = ConsumePackageRegistrationsAsync(
+                channel.Reader,
+                cancellationToken);
+            var consumeTask2 = ConsumePackageRegistrationsAsync(
                 channel.Reader,
                 cancellationToken);
 
-            await Task.WhenAll(produceTask, consumeTask);
+            await Task.WhenAll(produceTask, consumeTask1, consumeTask2);
 
             _logger.LogInformation("Finished rebuilding search");
         }
 
         private async Task ProducePackageRegistrationsAsync(
-            ChannelWriter<PackageRegistration> channel,
+            ChannelWriter<IndexAction<KeyedDocument>> channel,
             ConcurrentBag<string> packageIds,
             CancellationToken cancellationToken)
         {
@@ -110,30 +114,33 @@ namespace BaGet
                         packageId,
                         packages);
 
-                    if (!channel.TryWrite(registration))
+                    foreach (var action in _actionBuilder.AddPackage(registration))
                     {
-                        await channel.WriteAsync(registration);
+                        if (!channel.TryWrite(action))
+                        {
+                            await channel.WriteAsync(action);
+                        }
                     }
                 },
                 cancellationToken);
         }
 
         private async Task ConsumePackageRegistrationsAsync(
-            ChannelReader<PackageRegistration> channel,
+            ChannelReader<IndexAction<KeyedDocument>> channel,
             CancellationToken cancellationToken)
         {
+            var indexer = _indexerFactory();
+
             while (await channel.WaitToReadAsync(cancellationToken))
             {
-                while (channel.TryRead(out var registration))
+                while (channel.TryRead(out var action))
                 {
-                    foreach (var action in _actionBuilder.AddPackage(registration))
-                    {
-                        await _indexer.EnqueueIndexActionAsync(action, cancellationToken);
-                    }
+                    await indexer.EnqueueIndexActionAsync(action, cancellationToken);
+                    await indexer.PushBatchesAsync(onlyFull: true, cancellationToken);
                 }
             }
 
-            await _indexer.PushBatchesAsync(cancellationToken);
+            await indexer.PushBatchesAsync(cancellationToken);
         }
     }
 }
