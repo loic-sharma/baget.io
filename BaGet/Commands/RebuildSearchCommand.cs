@@ -127,7 +127,7 @@ namespace BaGet
                 {
                     if (!channel.TryWrite(action))
                     {
-                        await channel.WriteAsync(action);
+                        await channel.WriteAsync(action, cancellationToken);
                     }
                 }
             }
