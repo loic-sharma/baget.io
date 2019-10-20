@@ -95,11 +95,7 @@ namespace BaGet
             services.AddSingleton<BatchQueueClient>();
             services.AddSingleton<PackageIndexer>();
 
-            services.AddSingleton<Func<AzureSearchBatchIndexer>>(provider =>
-            {
-                return () => provider.GetRequiredService<AzureSearchBatchIndexer>();
-            });
-
+            services.AddSingleton<AzureSearchBatchIndexer>();
             services.AddSingleton<IndexActionBuilder>();
 
             return services;

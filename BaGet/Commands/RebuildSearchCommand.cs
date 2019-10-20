@@ -21,7 +21,7 @@ namespace BaGet
         private readonly ICursor _cursor;
         private readonly IPackageService _packages;
         private readonly IndexActionBuilder _actionBuilder;
-        private readonly Func<AzureSearchBatchIndexer> _indexerFactory;
+        private readonly AzureSearchBatchIndexer _indexer;
         private readonly ILogger<RebuildSearchCommand> _logger;
 
         public RebuildSearchCommand(
@@ -29,14 +29,14 @@ namespace BaGet
             ICursor cursor,
             IPackageService packages,
             IndexActionBuilder actionBuilder,
-            Func<AzureSearchBatchIndexer> indexerFactory,
+            AzureSearchBatchIndexer indexer,
             ILogger<RebuildSearchCommand> logger)
         {
             _clientFactory = clientFactory;
             _cursor = cursor;
             _packages = packages;
             _actionBuilder = actionBuilder;
-            _indexerFactory = indexerFactory;
+            _indexer = indexer;
             _logger = logger;
         }
 
@@ -73,21 +73,18 @@ namespace BaGet
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleWriter = false,
-                SingleReader = false,
+                SingleReader = true,
             });
 
             var produceTask = ProduceIndexActionsAsync(
                 channel.Writer,
                 new ConcurrentBag<string>(packageIds),
                 cancellationToken);
-            var consumeTask1 = ConsumePackageRegistrationsAsync(
-                channel.Reader,
-                cancellationToken);
-            var consumeTask2 = ConsumePackageRegistrationsAsync(
+            var consumeTask = ConsumePackageRegistrationsAsync(
                 channel.Reader,
                 cancellationToken);
 
-            await Task.WhenAll(produceTask, consumeTask1, consumeTask2);
+            await Task.WhenAll(produceTask, consumeTask);
 
             _logger.LogInformation("Finished rebuilding search");
         }
@@ -114,7 +111,7 @@ namespace BaGet
                 if (packages.Count == 0)
                 {
                     _logger.LogWarning(
-                        "Could not find any packages named {PackageId}, skipping...",
+                        "Could not find any listed packages for package ID {PackageId}, skipping...",
                         packageId);
                     return;
                 }
@@ -137,18 +134,16 @@ namespace BaGet
             ChannelReader<IndexAction<KeyedDocument>> channel,
             CancellationToken cancellationToken)
         {
-            var indexer = _indexerFactory();
-
             while (await channel.WaitToReadAsync(cancellationToken))
             {
                 while (channel.TryRead(out var action))
                 {
-                    await indexer.EnqueueIndexActionAsync(action, cancellationToken);
-                    await indexer.PushBatchesAsync(onlyFull: true, cancellationToken);
+                    await _indexer.EnqueueIndexActionAsync(action, cancellationToken);
+                    await _indexer.PushBatchesAsync(onlyFull: true, cancellationToken);
                 }
             }
 
-            await indexer.PushBatchesAsync(cancellationToken);
+            await _indexer.PushBatchesAsync(cancellationToken);
 
             _logger.LogInformation("Finished consuming index actions");
         }
