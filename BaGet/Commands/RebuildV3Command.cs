@@ -37,7 +37,7 @@ namespace BaGet
         {
             if (!_options.Value.Enqueue)
             {
-                _logger.LogError("V3 rebuild does not support direct processing at this time, pleas use --enqueue");
+                _logger.LogError("V3 rebuild does not support direct processing at this time, please use --enqueue");
                 return;
             }
 
