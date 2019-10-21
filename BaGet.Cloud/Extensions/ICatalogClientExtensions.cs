@@ -24,7 +24,7 @@ namespace BaGet
             var catalogPageUrls = new ConcurrentBag<CatalogPageItem>(
                 catalogIndex.GetPagesInBounds(minCursor, maxCursor));
 
-            await ParallelHelper.ProcessInParallel(
+            await ParallelAsync.RunAsync(
                 catalogPageUrls,
                 ProcessCatalogPageAsync,
                 cancellationToken);

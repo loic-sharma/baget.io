@@ -18,8 +18,8 @@ namespace BaGet
     {
         public static async Task Main(string[] args)
         {
-            ThreadPool.SetMinThreads(ParallelHelper.MaxDegreeOfParallelism, completionPortThreads: 4);
-            ServicePointManager.DefaultConnectionLimit = ParallelHelper.MaxDegreeOfParallelism;
+            ThreadPool.SetMinThreads(ParallelAsync.MaxDegreeOfConcurrency, completionPortThreads: 4);
+            ServicePointManager.DefaultConnectionLimit = ParallelAsync.MaxDegreeOfConcurrency;
             ServicePointManager.MaxServicePointIdleTime = 10000;
 
             var appBuilder = BaGetCommand.Create();

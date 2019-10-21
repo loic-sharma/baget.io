@@ -6,19 +6,28 @@ using System.Threading.Tasks;
 
 namespace BaGet
 {
-    public static class ParallelHelper
+    public static class ParallelAsync
     {
-        public const int MaxDegreeOfParallelism = 32;
+        public const int MaxDegreeOfConcurrency = 32;
         private const int MaxRetries = 3;
 
-        public static async Task ProcessInParallel<T>(
+        public static async Task RunAsync<T>(
             ConcurrentBag<T> allWork,
             Func<T, CancellationToken, Task> worker,
             CancellationToken cancellationToken)
         {
+            await RunAsync(allWork, worker, MaxDegreeOfConcurrency, cancellationToken);
+        }
+
+        public static async Task RunAsync<T>(
+            ConcurrentBag<T> allWork,
+            Func<T, CancellationToken, Task> worker,
+            int degreesOfConcurrency,
+            CancellationToken cancellationToken)
+        {
              await Task.WhenAll(
                 Enumerable
-                    .Repeat(allWork, MaxDegreeOfParallelism)
+                    .Repeat(allWork, degreesOfConcurrency)
                     .Select(async work =>
                     {
                         while (work.TryTake(out var item))

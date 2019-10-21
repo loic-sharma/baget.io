@@ -98,7 +98,7 @@ namespace BaGet
             ConcurrentBag<string> packageIds,
             CancellationToken cancellationToken)
         {
-            await ParallelHelper.ProcessInParallel(
+            await ParallelAsync.RunAsync(
                 packageIds,
                 ProduceIndexActionsAsync,
                 cancellationToken);

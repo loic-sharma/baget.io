@@ -40,7 +40,7 @@ namespace BaGet
             {
                 var messageBatches = SplitMessages(messages);
 
-                await ParallelHelper.ProcessInParallel(
+                await ParallelAsync.RunAsync(
                     messageBatches,
                     _queue.SendAsync,
                     cancellationToken);
