@@ -14,43 +14,38 @@ namespace BaGet
         public static async Task RunAsync<T>(
             ConcurrentBag<T> allWork,
             Func<T, CancellationToken, Task> worker,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken = default)
         {
-            await RunAsync(allWork, worker, MaxDegreeOfConcurrency, cancellationToken);
+            await RepeatAsync(async () =>
+            {
+                while (allWork.TryTake(out var item))
+                {
+                    var attempt = 0;
+
+                    while (true)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        try
+                        {
+                            await worker(item, cancellationToken);
+                            break;
+                        }
+                        catch (Exception) when (attempt < MaxRetries)
+                        {
+                            attempt++;
+                        }
+                    }
+                }
+            });
         }
 
-        public static async Task RunAsync<T>(
-            ConcurrentBag<T> allWork,
-            Func<T, CancellationToken, Task> worker,
-            int degreesOfConcurrency,
-            CancellationToken cancellationToken)
+        public static async Task RepeatAsync(Func<Task> taskFactory, int? degreesOfConcurrency = null)
         {
              await Task.WhenAll(
                 Enumerable
-                    .Repeat(allWork, degreesOfConcurrency)
-                    .Select(async work =>
-                    {
-                        while (work.TryTake(out var item))
-                        {
-                            var attempt = 0;
-
-                            while (true)
-                            {
-                                cancellationToken.ThrowIfCancellationRequested();
-
-                                try
-                                {
-                                    await worker(item, cancellationToken);
-                                    break;
-                                }
-                                catch (Exception) when (attempt < MaxRetries)
-                                {
-                                    attempt++;
-                                }
-                            }
-
-                        }
-                    }));
+                    .Repeat(taskFactory, degreesOfConcurrency ?? MaxDegreeOfConcurrency)
+                    .Select(f => f()));
         }
     }
 }

@@ -87,8 +87,15 @@ namespace BaGet
             var consumeTask2 = ConsumeIndexActionsAsync(
                 channel.Reader,
                 cancellationToken);
+            var consumeTask3 = ConsumeIndexActionsAsync(
+                channel.Reader,
+                cancellationToken);
 
-            await Task.WhenAll(produceTask, consumeTask1, consumeTask2);
+            await Task.WhenAll(
+                produceTask,
+                consumeTask1,
+                consumeTask2,
+                consumeTask3);
 
             _logger.LogInformation("Finished rebuilding search");
         }
