@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BaGet
 {
@@ -17,11 +18,13 @@ namespace BaGet
     {
         public static async Task Main(string[] args)
         {
-            ThreadPool.SetMinThreads(ParallelHelper.MaxDegreeOfParallelism, completionPortThreads: 4);
-            ServicePointManager.DefaultConnectionLimit = ParallelHelper.MaxDegreeOfParallelism;
+            ThreadPool.SetMinThreads(ParallelAsync.MaxDegreeOfConcurrency, completionPortThreads: 4);
+            ServicePointManager.DefaultConnectionLimit = ParallelAsync.MaxDegreeOfConcurrency;
             ServicePointManager.MaxServicePointIdleTime = 10000;
 
-            var parser = CommandLine.Create()
+            var appBuilder = BaGetCommand.Create();
+
+            var parser = appBuilder
                 .UseDefaults()
                 .UseHost(host =>
                 {
@@ -40,26 +43,28 @@ namespace BaGet
                     host.ConfigureServices((ctx, services) =>
                     {
                         services.AddBaGet();
-
+                        services.AddCommands(appBuilder);
                         services.Configure<Configuration>(ctx.Configuration);
 
-                        services.AddSingleton<CreateAzureSearchIndexCommand>();
-                        services.AddSingleton<ImportCatalogCommand>();
-                        services.AddSingleton<ImportDownloadsCommand>();
-                        services.AddSingleton<RebuildCommand>();
-
-                        services.AddSingleton<ICatalogLeafItemBatchProcessor>(provider =>
+                        services.AddSingleton(provider =>
                         {
-                            var parseResult = provider.GetRequiredService<ParseResult>();
-
-                            if (parseResult.HasOption("enqueue"))
-                            {
-                                return provider.GetRequiredService<QueueCatalogLeafItems>();
-                            }
-
                             var leafProcesor = provider.GetRequiredService<ProcessCatalogLeafItem>();
 
                             return new DefaultCatalogLeafItemBatchProcessor(leafProcesor);
+                        });
+
+                        services.AddSingleton<ICatalogLeafItemBatchProcessor>(provider =>
+                        {
+                            var options = provider.GetRequiredService<IOptions<AddPackagesOptions>>();
+
+                            if (options.Value.Enqueue)
+                            {
+                                return provider.GetRequiredService<QueueCatalogLeafItems>();
+                            }
+                            else
+                            {
+                                return provider.GetRequiredService<DefaultCatalogLeafItemBatchProcessor>();
+                            }
                         });
                     });
                 })

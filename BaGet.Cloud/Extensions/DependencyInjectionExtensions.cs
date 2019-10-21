@@ -1,6 +1,8 @@
+using System;
 using System.Net;
 using System.Net.Http;
 using BaGet.Azure;
+using BaGet.Azure.Search;
 using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
@@ -73,7 +75,9 @@ namespace BaGet
                     new SearchCredentials(config.Value.Search.ApiKey));
             });
 
-            services.AddSingleton<ISearchServiceClient>(provider =>
+            // TODO: Move BaGet to ISearchServiceClient and remove this line:
+            services.AddSingleton<ISearchServiceClient>(p => p.GetRequiredService<SearchServiceClient>());
+            services.AddSingleton(provider =>
             {
                 var config = provider.GetRequiredService<IOptions<Configuration>>();
 
@@ -92,6 +96,8 @@ namespace BaGet
             services.AddSingleton<BatchQueueClient>();
             services.AddSingleton<PackageIndexer>();
 
+            services.AddSingleton<AzureSearchBatchIndexer>();
+            services.AddSingleton<IndexActionBuilder>();
 
             return services;
         }

@@ -67,10 +67,7 @@ namespace BaGet
                         _headerSizeEstimateBytes);
                 }
             }
-        }
 
-        public async Task CompleteAsync(CancellationToken cancellationToken)
-        {
             _logger.LogInformation("Completed enqueueing messages");
             await _queue.CloseAsync();
         }

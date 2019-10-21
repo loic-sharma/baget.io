@@ -17,7 +17,7 @@ namespace BaGet
 
         public async Task ProcessAsync(IEnumerable<CatalogLeafItem> catalogLeafItems, CancellationToken cancellationToken = default)
         {
-            await ParallelHelper.ProcessInParallel(
+            await ParallelAsync.RunAsync(
                 new ConcurrentBag<CatalogLeafItem>(catalogLeafItems),
                 _leafProcessor.ProcessAsync,
                 cancellationToken);

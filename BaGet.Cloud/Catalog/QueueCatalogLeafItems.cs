@@ -40,7 +40,7 @@ namespace BaGet
             {
                 var messageBatches = SplitMessages(messages);
 
-                await ParallelHelper.ProcessInParallel(
+                await ParallelAsync.RunAsync(
                     messageBatches,
                     _queue.SendAsync,
                     cancellationToken);
@@ -49,8 +49,6 @@ namespace BaGet
             {
                 await _queue.SendAsync(messages, cancellationToken);
             }
-
-            await _queue.CompleteAsync(cancellationToken);
         }
 
         private ConcurrentBag<IReadOnlyList<Message>> SplitMessages(IReadOnlyList<Message> messages)
