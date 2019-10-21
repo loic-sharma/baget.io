@@ -1,11 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
-using BaGet.Protocol.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NuGet.Packaging.Core;
@@ -49,7 +47,7 @@ namespace BaGet
                 minCursor = DateTimeOffset.MinValue;
             }
 
-            _logger.LogInformation("Finding catalog leafs comitted after time {Cursor}...", minCursor);
+            _logger.LogInformation("Finding catalog leafs committed after time {Cursor}...", minCursor);
 
             var catalogClient = _clientFactory.CreateCatalogClient();
             var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
@@ -58,7 +56,13 @@ namespace BaGet
                 _logger,
                 cancellationToken);
 
-            catalogLeafItems = DeduplicateCatalogLeafItems(catalogLeafItems);
+            _logger.LogInformation("Removing duplicate catalog leafs...");
+
+            catalogLeafItems = catalogLeafItems
+                .GroupBy(l => new PackageIdentity(l.PackageId, l.ParsePackageVersion()))
+                .Select(g => g.OrderByDescending(l => l.CommitTimestamp).First())
+                .Where(l => l.IsPackageDetails())
+                .ToList();
 
             _logger.LogInformation("Processing {CatalogLeafs} catalog leafs...", catalogLeafItems.Count());
 
@@ -66,19 +70,6 @@ namespace BaGet
             await _cursor.SetAsync(catalogIndex.CommitTimestamp, cancellationToken);
 
             _logger.LogInformation("Finished processing catalog leafs");
-        }
-
-        private IEnumerable<CatalogLeafItem> DeduplicateCatalogLeafItems(IEnumerable<CatalogLeafItem> catalogLeafItems)
-        {
-            // Grab only the latest catalog leaf for each package id and version.
-            // Skip packages that were deleted.
-            _logger.LogInformation("Removing duplicate leafs...");
-
-            return catalogLeafItems
-                .GroupBy(l => new PackageIdentity(l.PackageId, l.ParsePackageVersion()))
-                .Select(g => g.OrderByDescending(l => l.CommitTimestamp).First())
-                .Where(l => l.IsPackageDetails())
-                .ToList();
         }
     }
 }

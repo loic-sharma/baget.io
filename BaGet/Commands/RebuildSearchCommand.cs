@@ -49,7 +49,7 @@ namespace BaGet
                 maxCursor = DateTimeOffset.MinValue;
             }
 
-            _logger.LogInformation("Finding catalog leafs comitted before time {Cursor}...", maxCursor);
+            _logger.LogInformation("Finding catalog leafs committed before time {Cursor}...", maxCursor);
 
             var catalogClient = _clientFactory.CreateCatalogClient();
             var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
@@ -58,7 +58,7 @@ namespace BaGet
                 _logger,
                 cancellationToken);
 
-            _logger.LogInformation("Deduplicating catalog leafs...");
+            _logger.LogInformation("Removing duplicate catalog leafs...");
 
             var packageIds = catalogLeafItems
                 .GroupBy(l => new PackageIdentity(l.PackageId, l.ParsePackageVersion()))

@@ -7,6 +7,7 @@ using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
 using Microsoft.Azure.ServiceBus;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BaGet
 {
@@ -15,22 +16,31 @@ namespace BaGet
         private readonly NuGetClientFactory _clientFactory;
         private readonly BatchQueueClient _queue;
         private readonly ICursor _cursor;
+        private readonly IOptions<RebuildV3Options> _options;
         private readonly ILogger<RebuildV3Command> _logger;
 
         public RebuildV3Command(
             NuGetClientFactory clientFactory,
             BatchQueueClient queue,
             ICursor cursor,
+            IOptions<RebuildV3Options> options,
             ILogger<RebuildV3Command> logger)
         {
             _clientFactory = clientFactory;
             _queue = queue;
             _cursor = cursor;
+            _options = options;
             _logger = logger;
         }
 
         public async Task RunAsync(CancellationToken cancellationToken = default)
         {
+            if (!_options.Value.Enqueue)
+            {
+                _logger.LogError("V3 rebuild does not support direct processing at this time, pleas use --enqueue");
+                return;
+            }
+
             var minCursor = DateTimeOffset.MinValue;
             var maxCursor = await _cursor.GetAsync(cancellationToken);
             if (maxCursor == null)
@@ -38,7 +48,7 @@ namespace BaGet
                 maxCursor = DateTimeOffset.MinValue;
             }
 
-            _logger.LogInformation("Finding catalog leafs comitted before time {Cursor}...", maxCursor);
+            _logger.LogInformation("Finding catalog leafs committed before time {Cursor}...", maxCursor);
 
             var catalogClient = _clientFactory.CreateCatalogClient();
             var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
