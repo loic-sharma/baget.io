@@ -153,7 +153,7 @@ namespace BaGet
                 {
                     actions.Add(action);
 
-                    if (actions.Count >= 1000)
+                    if (actions.Count >= AzureSearchBatchIndexer.MaxBatchSize)
                     {
                         await _indexer.IndexAsync(actions, cancellationToken);
                         actions.Clear();

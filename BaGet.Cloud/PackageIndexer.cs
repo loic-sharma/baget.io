@@ -72,7 +72,6 @@ namespace BaGet
                 "Updating the search service for {PackageId}...",
                 packageId);
 
-            // TODO: This requires updating BaGet.Azure to exclude unlisted packages!
             var actions = _actionBuilder.UpdatePackage(new PackageRegistration(
                 packageId,
                 packages));
