@@ -28,6 +28,7 @@ namespace BaGet
         private readonly IPackageService _packages;
         private readonly IUrlGenerator _url;
         private readonly CloudBlobContainer _blobContainer;
+        private readonly RegistrationBuilder _registrationBuilder;
         private readonly IndexActionBuilder _actionBuilder;
         private readonly AzureSearchBatchIndexer _search;
         private readonly ILogger<PackageIndexer> _logger;
@@ -36,6 +37,7 @@ namespace BaGet
             IPackageService packages,
             IUrlGenerator url,
             CloudBlobContainer blobContainer,
+            RegistrationBuilder registrationBuilder,
             IndexActionBuilder actionBuilder,
             AzureSearchBatchIndexer search,
             ILogger<PackageIndexer> logger)
@@ -43,6 +45,7 @@ namespace BaGet
             _packages = packages;
             _url = url;
             _blobContainer = blobContainer;
+            _registrationBuilder = registrationBuilder;
             _actionBuilder = actionBuilder;
             _search = search;
             _logger = logger;
@@ -57,54 +60,29 @@ namespace BaGet
                 return;
             }
 
+            var packageRegistration = new PackageRegistration(
+                packageId,
+                packages);
+
             // Update the package metadata resource.
             _logger.LogInformation(
                 "Updating the package metadata resource for {PackageId}...",
                 packageId);
 
-            await UploadRegistrationIndexAsync(
-                packageId,
-                BuildRegistrationIndex(packageId, packages),
-                cancellationToken);
+            var index = _registrationBuilder.BuildIndex(packageRegistration);
+
+            await UploadRegistrationIndexAsync(packageId, index, cancellationToken);
 
             // Update the search service.
             _logger.LogInformation(
                 "Updating the search service for {PackageId}...",
                 packageId);
 
-            var actions = _actionBuilder.UpdatePackage(new PackageRegistration(
-                packageId,
-                packages));
+            var actions = _actionBuilder.UpdatePackage(packageRegistration);
 
             await _search.IndexAsync(actions, cancellationToken);
 
             _logger.LogInformation("Indexed package {PackageId}", packageId);
-        }
-
-        private BaGetRegistrationIndexResponse BuildRegistrationIndex(
-            string packageId,
-            IReadOnlyList<Package> packages)
-        {
-            var versions = packages.Select(p => p.Version).ToList();
-
-            return new BaGetRegistrationIndexResponse
-            {
-                RegistrationIndexUrl = _url.GetRegistrationIndexUrl(packageId),
-                Type = RegistrationIndexResponse.DefaultType,
-                Count = 1,
-                TotalDownloads = packages.Sum(p => p.Downloads),
-                Pages = new[]
-                {
-                    new RegistrationIndexPage
-                    {
-                        RegistrationPageUrl = _url.GetRegistrationIndexUrl(packages.First().Id),
-                        Count = packages.Count(),
-                        Lower = versions.Min().ToNormalizedString().ToLowerInvariant(),
-                        Upper = versions.Max().ToNormalizedString().ToLowerInvariant(),
-                        ItemsOrNull = packages.Select(ToRegistrationIndexPageItem).ToList(),
-                    }
-                }
-            };
         }
 
         private async Task UploadRegistrationIndexAsync(
@@ -131,61 +109,6 @@ namespace BaGet
                 memoryStream.Position = 0;
                 await blob.UploadFromStreamAsync(memoryStream, cancellationToken);
             }
-        }
-
-        private RegistrationIndexPageItem ToRegistrationIndexPageItem(Package package) =>
-            new RegistrationIndexPageItem
-            {
-                RegistrationLeafUrl = _url.GetRegistrationLeafUrl(package.Id, package.Version),
-                PackageContentUrl = _url.GetPackageDownloadUrl(package.Id, package.Version),
-                PackageMetadata = new BaGetPackageMetadata
-                {
-                    PackageId = package.Id,
-                    Version = package.Version.ToFullString(),
-                    Authors = string.Join(", ", package.Authors),
-                    Description = package.Description,
-                    Downloads = package.Downloads,
-                    HasReadme = package.HasReadme,
-                    IconUrl = package.IconUrlString,
-                    Language = package.Language,
-                    LicenseUrl = package.LicenseUrlString,
-                    Listed = package.Listed,
-                    MinClientVersion = package.MinClientVersion,
-                    PackageContentUrl = _url.GetPackageDownloadUrl(package.Id, package.Version),
-                    PackageTypes = package.PackageTypes.Select(t => t.Name).ToList(),
-                    ProjectUrl = package.ProjectUrlString,
-                    RepositoryUrl = package.RepositoryUrlString,
-                    RepositoryType = package.RepositoryType,
-                    Published = package.Published,
-                    RequireLicenseAcceptance = package.RequireLicenseAcceptance,
-                    Summary = package.Summary,
-                    Tags = package.Tags,
-                    Title = package.Title,
-                    DependencyGroups = ToDependencyGroups(package)
-                },
-            };
-
-        private IReadOnlyList<DependencyGroupItem> ToDependencyGroups(Package package)
-        {
-            return package.Dependencies
-                .GroupBy(d => d.TargetFramework)
-                .Select(group => new DependencyGroupItem
-                {
-                    TargetFramework = group.Key,
-
-                    // A package that supports a target framework but does not have dependencies while on
-                    // that target framework is represented by a fake dependency with a null "Id" and "VersionRange".
-                    // This fake dependency should not be included in the output.
-                    Dependencies = group
-                        .Where(d => d.Id != null && d.VersionRange != null)
-                        .Select(d => new DependencyItem
-                        {
-                            Id = d.Id,
-                            Range = d.VersionRange
-                        })
-                        .ToList()
-                })
-                .ToList();
         }
     }
 }
