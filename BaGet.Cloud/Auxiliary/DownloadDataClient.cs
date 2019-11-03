@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
-namespace BaGet.Cloud
+namespace BaGet
 {
     // Based off: https://github.com/NuGet/NuGet.Services.Metadata/blob/e921a7eef360ee6bcc11b7ca9f94d96e93193a1c/src/NuGet.Services.AzureSearch/AuxiliaryFiles/DownloadDataClient.cs#L17
     public class DownloadDataClient
@@ -30,13 +30,14 @@ namespace BaGet.Cloud
         {
             _logger.LogInformation("Downloading downloads.v1.json...");
 
+            var downloads = new DownloadData();
+
             using (var response = await _httpClient.GetAsync(DownloadsV1Url, cancellationToken))
             {
                 response.EnsureSuccessStatusCode();
 
                 using (var stream = await response.Content.ReadAsStreamAsync())
                 {
-                    var downloads = new DownloadData();
 
                     ReadStream(
                         stream,
@@ -46,10 +47,12 @@ namespace BaGet.Cloud
                             //version = stringCache.Dedupe(version);
                             downloads.SetDownloadCount(id, version, downloadCount);
                         });
-
-                    return downloads;
                 }
             }
+
+            _logger.LogInformation("Downloaded downloads.v1.json");
+
+            return downloads;
         }
 
         private static void ReadStream(

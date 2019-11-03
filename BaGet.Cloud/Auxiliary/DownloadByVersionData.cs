@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-namespace BaGet.Cloud
+namespace BaGet
 {
     public class DownloadByVersionData : IReadOnlyDictionary<string, long>
     {

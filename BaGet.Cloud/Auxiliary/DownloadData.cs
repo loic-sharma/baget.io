@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-namespace BaGet.Cloud
+namespace BaGet
 {
     // Based off: https://github.com/NuGet/NuGet.Services.Metadata/blob/e921a7eef360ee6bcc11b7ca9f94d96e93193a1c/src/NuGet.Services.AzureSearch/AuxiliaryFiles/DownloadData.cs
     public class DownloadData : IReadOnlyDictionary<string, DownloadByVersionData>

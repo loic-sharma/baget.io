@@ -1,9 +1,9 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BaGet.Azure;
-using BaGet.Cloud;
 using BaGet.Core;
 using Microsoft.Azure.Search.Models;
 using Microsoft.Extensions.Logging;
@@ -55,6 +55,7 @@ namespace BaGet
 
             var idsToIndex = new HashSet<string>();
             var newDownloads = new DownloadData();
+            var stopwatch = Stopwatch.StartNew();
 
             if (_options.Value.UpdateDownloads)
             {
@@ -82,6 +83,8 @@ namespace BaGet
                 var packageRegistration = new PackageRegistration(
                     packageId,
                     packages);
+
+                _logger.LogInformation("Updating package {PackageId}...", packageId);
 
                 // Update the Azure Storage Table.
                 foreach (var package in packages)
@@ -123,6 +126,10 @@ namespace BaGet
                 onlyFullOperations: false,
                 onlyFullActions: false,
                 cancellationToken);
+
+            _logger.LogInformation(
+                "Updated packages in {TotalSeconds} seconds",
+                stopwatch.Elapsed.TotalSeconds);
         }
     }
 }

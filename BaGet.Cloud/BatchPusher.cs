@@ -6,7 +6,7 @@ using Microsoft.Azure.Cosmos.Table;
 using Microsoft.Azure.Search.Models;
 using Microsoft.Extensions.Logging;
 
-namespace BaGet.Cloud
+namespace BaGet
 {
     public class BatchPusher
     {
@@ -67,12 +67,16 @@ namespace BaGet.Cloud
 
             if (!onlyFullOperations || operationsFull || actionsFull)
             {
+                _logger.LogDebug("Executing batch of {Count} table operations...", _tableOperations.Count);
+
                 await _table.ExecuteBatchAsync(_tableOperations, cancellationToken);
                 _tableOperations = new TableBatchOperation();
             }
 
             if (!onlyFullActions || actionsFull)
             {
+                _logger.LogDebug("Executing batch of {Count} index actions...", _indexActions.Count);
+
                 await _indexer.IndexAsync(_indexActions, cancellationToken);
                 _indexActions.Clear();
             }

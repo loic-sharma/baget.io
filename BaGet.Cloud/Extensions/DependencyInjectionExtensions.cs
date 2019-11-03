@@ -89,11 +89,14 @@ namespace BaGet
             services.AddSingleton<ICursor, BlobCursor>();
             services.AddSingleton<IUrlGenerator, UrlGenerator>();
             services.AddSingleton<IPackageDownloadsSource, PackageDownloadsJsonSource>();
+            services.AddSingleton<TableOperationBuilder>();
 
             services.AddSingleton<ProcessCatalogLeafItem>();
             services.AddSingleton<QueueCatalogLeafItems>();
             services.AddSingleton<BatchQueueClient>();
             services.AddSingleton<PackageIndexer>();
+            services.AddSingleton<DownloadDataClient>();
+            services.AddSingleton<BatchPusher>();
 
             services.AddSingleton<AzureSearchBatchIndexer>();
             services.AddSingleton<IndexActionBuilder>();
