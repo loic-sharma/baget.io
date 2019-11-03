@@ -16,14 +16,14 @@ namespace BaGet
         private readonly NuGetClientFactory _clientFactory;
         private readonly IPackageService _packages;
         private readonly CloudBlobContainer _blobContainer;
-        private readonly PackageIndexer _indexer;
+        private readonly ISearchIndexer _indexer;
         private readonly ILogger<ProcessCatalogLeafItem> _logger;
 
         public ProcessCatalogLeafItem(
             NuGetClientFactory clientFactory,
             IPackageService packages,
             CloudBlobContainer blobContainer,
-            PackageIndexer indexer,
+            ISearchIndexer indexer,
             ILogger<ProcessCatalogLeafItem> logger)
         {
             _clientFactory = clientFactory;
@@ -33,7 +33,7 @@ namespace BaGet
             _logger = logger;
         }
 
-        public async Task ProcessAsync(CatalogLeafItem catalogLeafItem, CancellationToken cancellationToken = default)
+        public async Task ProcessAsync(CatalogLeafItem catalogLeafItem, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Processing catalog leaf {CatalogLeafUrl}", catalogLeafItem.CatalogLeafUrl);
 
@@ -54,7 +54,7 @@ namespace BaGet
             _logger.LogInformation("Processed catalog leaf {CatalogLeafUrl}", catalogLeafItem.CatalogLeafUrl);
         }
 
-        public Task CompleteAsync(CancellationToken cancellationToken = default)
+        public Task CompleteAsync(CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
         }
@@ -66,24 +66,7 @@ namespace BaGet
             var catalogClient = _clientFactory.CreateCatalogClient();
             var catalogLeaf = await catalogClient.GetPackageDetailsLeafAsync(catalogLeafItem.CatalogLeafUrl, cancellationToken);
 
-            await IndexPackageAsync(catalogLeaf, cancellationToken);
-        }
-
-        private async Task ProcessPackageDeleteAsync(
-            CatalogLeafItem catalogLeafItem,
-            CancellationToken cancellationToken)
-        {
-            await _packages.UnlistPackageAsync(
-                catalogLeafItem.PackageId,
-                catalogLeafItem.ParsePackageVersion(),
-                cancellationToken);
-        }
-
-        private async Task IndexPackageAsync(
-            PackageDetailsCatalogLeaf catalogLeaf,
-            CancellationToken cancellationToken)
-        {
-            var packageId = catalogLeaf.PackageId;
+            var packageId = catalogLeaf.PackageId.ToLowerInvariant();
             var packageVersion = catalogLeaf.ParsePackageVersion();
 
             Package package;
@@ -112,10 +95,8 @@ namespace BaGet
 
                     if (package.HasReadme)
                     {
-                        using (var stream = await reader.GetReadmeAsync(cancellationToken))
-                        {
-                            readmeStream = await stream.AsTemporaryFileStreamAsync(cancellationToken);
-                        }
+                        readmeStream = await reader.GetReadmeAsync(cancellationToken);
+                        readmeStream = await readmeStream.AsTemporaryFileStreamAsync(cancellationToken);
                     }
 
                     await IndexPackageAsync(package, readmeStream, cancellationToken);
@@ -138,32 +119,31 @@ namespace BaGet
             }
         }
 
+        private async Task ProcessPackageDeleteAsync(
+            CatalogLeafItem catalogLeafItem,
+            CancellationToken cancellationToken)
+        {
+            await _packages.UnlistPackageAsync(
+                catalogLeafItem.PackageId,
+                catalogLeafItem.ParsePackageVersion(),
+                cancellationToken);
+        }
+
         private async Task IndexPackageAsync(
             Package package,
             Stream readmeStreamOrNull,
             CancellationToken cancellationToken)
         {
             var packageId = package.Id.ToLowerInvariant();
-            var packageVersion = package.Version.ToNormalizedString().ToLowerInvariant();
+            var packageVersion = package.NormalizedVersionString.ToLowerInvariant();
 
             if (readmeStreamOrNull != null)
             {
-                _logger.LogInformation(
-                    "Uploading readme for package {PackageId} {PackageVersion}...",
+                await UploadReadmeAsync(
                     packageId,
-                    packageVersion);
-
-                var blob = _blobContainer.GetBlockBlobReference($"v3/package/{packageId}/{packageVersion}/readme");
-
-                blob.Properties.ContentType = "text/markdown";
-                blob.Properties.CacheControl = "max-age=120, must-revalidate";
-
-                await blob.UploadFromStreamAsync(readmeStreamOrNull, cancellationToken);
-
-                _logger.LogInformation(
-                    "Uploaded readme for package {PackageId} {PackageVersion}",
-                    packageId,
-                    packageVersion);
+                    packageVersion,
+                    readmeStreamOrNull,
+                    cancellationToken);
             }
 
             // Try to add the package to the database. If the package already exists,
@@ -187,8 +167,32 @@ namespace BaGet
                     throw new NotSupportedException($"Unknown add result '{addResult}'");
             }
 
-            // Lastly, use the database to update static resources and the search service.
-            await _indexer.BuildAsync(package.Id, cancellationToken);
+            // Finally, use the database to update the search service.
+            await _indexer.IndexAsync(package, cancellationToken);
+        }
+
+        private async Task UploadReadmeAsync(
+            string packageId,
+            string packageVersion,
+            Stream readme,
+            CancellationToken cancellationToken)
+        {
+            _logger.LogInformation(
+                "Uploading readme for package {PackageId} {PackageVersion}...",
+                packageId,
+                packageVersion);
+
+            var blob = _blobContainer.GetBlockBlobReference($"v3/package/{packageId}/{packageVersion}/readme");
+
+            blob.Properties.ContentType = "text/markdown";
+            blob.Properties.CacheControl = "max-age=120, must-revalidate";
+
+            await blob.UploadFromStreamAsync(readme, cancellationToken);
+
+            _logger.LogInformation(
+                "Uploaded readme for package {PackageId} {PackageVersion}",
+                packageId,
+                packageVersion);
         }
 
         private async Task UpdatePackageMetadata(Package latestPackage, CancellationToken cancellationToken)
