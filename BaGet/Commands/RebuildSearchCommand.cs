@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using BaGet.Azure.Search;
+using BaGet.Azure;
 using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
@@ -118,7 +118,7 @@ namespace BaGet
             {
                 _logger.LogInformation("Adding package {PackageId}...", packageId);
 
-                var packages = await _packages.FindAsync(packageId, includeUnlisted: false);
+                var packages = await _packages.FindAsync(packageId, includeUnlisted: false, cancellationToken);
                 if (packages.Count == 0)
                 {
                     _logger.LogWarning(

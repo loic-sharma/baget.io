@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BaGet.Azure" Version="0.2.0-master-1047" />
-    <PackageReference Include="BaGet.Core" Version="0.2.0-master-1047" />
-    <PackageReference Include="BaGet.Protocol" Version="0.2.0-master-1047" />
+    <PackageReference Include="BaGet.Azure" Version="0.2.0-master-1073" />
+    <PackageReference Include="BaGet.Core" Version="0.2.0-master-1073" />
+    <PackageReference Include="BaGet.Protocol" Version="0.2.0-master-1073" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.2.0" />

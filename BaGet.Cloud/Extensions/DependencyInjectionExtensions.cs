@@ -2,7 +2,6 @@ using System;
 using System.Net;
 using System.Net.Http;
 using BaGet.Azure;
-using BaGet.Azure.Search;
 using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;

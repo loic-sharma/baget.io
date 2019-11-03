@@ -73,7 +73,10 @@ namespace BaGet
             CatalogLeafItem catalogLeafItem,
             CancellationToken cancellationToken)
         {
-            await _packages.UnlistPackageAsync(catalogLeafItem.PackageId, catalogLeafItem.ParsePackageVersion());
+            await _packages.UnlistPackageAsync(
+                catalogLeafItem.PackageId,
+                catalogLeafItem.ParsePackageVersion(),
+                cancellationToken);
         }
 
         private async Task IndexPackageAsync(
@@ -165,7 +168,7 @@ namespace BaGet
 
             // Try to add the package to the database. If the package already exists,
             // the add operation will fail and we will update the package's metadata instead.
-            var addResult = await _packages.AddAsync(package);
+            var addResult = await _packages.AddAsync(package, cancellationToken);
             switch (addResult)
             {
                 case PackageAddResult.Success:
@@ -185,7 +188,7 @@ namespace BaGet
             }
 
             // Lastly, use the database to update static resources and the search service.
-            await _indexer.BuildAsync(package.Id);
+            await _indexer.BuildAsync(package.Id, cancellationToken);
         }
 
         private async Task UpdatePackageMetadata(Package latestPackage, CancellationToken cancellationToken)
@@ -215,11 +218,11 @@ namespace BaGet
             {
                 if (latestPackage.Listed)
                 {
-                    await _packages.RelistPackageAsync(packageId, packageVersion);
+                    await _packages.RelistPackageAsync(packageId, packageVersion, cancellationToken);
                 }
                 else
                 {
-                    await _packages.UnlistPackageAsync(packageId, packageVersion);
+                    await _packages.UnlistPackageAsync(packageId, packageVersion, cancellationToken);
                 }
             }
 
