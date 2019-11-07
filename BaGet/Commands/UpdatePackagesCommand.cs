@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using BaGet.Azure;
 using BaGet.Core;
@@ -69,59 +71,62 @@ namespace BaGet
                 }
             }
 
-            foreach (var rawPackageId in idsToIndex)
+            var channel = Channel.CreateBounded<PackageRegistration>(new BoundedChannelOptions(5000)
             {
-                var packages = await _packages.FindAsync(rawPackageId, includeUnlisted: true, cancellationToken);
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleWriter = false,
+                SingleReader = true,
+            });
 
-                // Skip if package does not exist.
-                if (!packages.Any())
+            var produceTask = ProducePackageRegistrationsAsync(
+                channel.Writer,
+                new ConcurrentBag<string>(idsToIndex),
+                cancellationToken);
+
+            while (await channel.Reader.WaitToReadAsync(cancellationToken))
+            {
+                while (channel.Reader.TryRead(out var packageRegistration))
                 {
-                    continue;
-                }
+                    var packageId = packageRegistration.PackageId;
+                    var packages = packageRegistration.Packages;
 
-                var packageId = packages.OrderByDescending(p => p.Version).Select(p => p.Id).First();
-                var packageRegistration = new PackageRegistration(
-                    packageId,
-                    packages);
+                    _logger.LogInformation("Updating package {PackageId}...", packageId);
 
-                _logger.LogInformation("Updating package {PackageId}...", packageId);
-
-                // Update the Azure Storage Table.
-                foreach (var package in packages)
-                {
-                    if (newDownloads.TryGetDownloadCount(packageId, package.NormalizedVersionString, out var downloadCount))
+                    // Update the Azure Storage Table.
+                    foreach (var package in packages)
                     {
-                        package.Downloads = downloadCount;
+                        if (newDownloads.TryGetDownloadCount(packageId, package.NormalizedVersionString, out var downloadCount))
+                        {
+                            package.Downloads = downloadCount;
 
-                        await _batchPusher.AddAsync(
-                            _operationBuilder.UpdateDownloads(
-                                packageId,
-                                package.Version,
-                                downloadCount),
-                            cancellationToken);
+                            await _batchPusher.AddAsync(
+                                _operationBuilder.UpdateDownloads(
+                                    packageId,
+                                    package.Version,
+                                    downloadCount),
+                                cancellationToken);
+                        }
                     }
+
+                    // Update the Azure Search index.
+                    var actions = _indexActionBuilder.UpdateDownloads(packageRegistration);
+
+                    foreach (var action in actions)
+                    {
+                        await _batchPusher.AddAsync(action, cancellationToken);
+                    }
+
+                    // The package ID is the Table's partition key. Since a Table batch can only affect a single
+                    // partition, flush the Table operations before moving onto the next package ID.
+                    await _batchPusher.FlushAsync(
+                        onlyFullOperations: false,
+                        onlyFullActions: true,
+                        cancellationToken);
                 }
-
-                // Update the Azure Search index.
-                var actions = new List<IndexAction<KeyedDocument>>();
-
-                // TODO: Generate real Azure Search index actions.
-                //var actions = _indexActionBuilder.UpdatePackageDownloads(packageRegistration);
-
-                foreach (var action in actions)
-                {
-                    await _batchPusher.AddAsync(action, cancellationToken);
-                }
-
-                // The package ID is the Table's partition key. Since a Table batch can only affect a single
-                // partition, flush the Table operations before moving onto the next package ID.
-                await _batchPusher.FlushAsync(
-                    onlyFullOperations: false,
-                    onlyFullActions: true,
-                    cancellationToken);
             }
 
             // Persist anything that's pending.
+            await produceTask;
             await _batchPusher.FlushAsync(
                 onlyFullOperations: false,
                 onlyFullActions: false,
@@ -130,6 +135,42 @@ namespace BaGet
             _logger.LogInformation(
                 "Updated packages in {TotalSeconds} seconds",
                 stopwatch.Elapsed.TotalSeconds);
+        }
+
+        private async Task ProducePackageRegistrationsAsync(
+            ChannelWriter<PackageRegistration> channel,
+            ConcurrentBag<string> packageIds,
+            CancellationToken cancellationToken)
+        {
+            await ParallelAsync.RunAsync(
+                packageIds,
+                ProducePackageRegistrationAsync,
+                cancellationToken);
+
+            _logger.LogInformation("Finished producing package registrations");
+            channel.Complete();
+            return;
+
+            async Task ProducePackageRegistrationAsync(string packageId, CancellationToken cancellationToken1)
+            {
+                var packages = await _packages.FindAsync(packageId, includeUnlisted: true, cancellationToken);
+
+                // Skip if package does not exist.
+                if (!packages.Any())
+                {
+                    return;
+                }
+
+                var latestPackageId = packages.OrderByDescending(p => p.Version).Select(p => p.Id).First();
+                var packageRegistration = new PackageRegistration(
+                    packageId,
+                    packages);
+
+                if (!channel.TryWrite(packageRegistration))
+                {
+                    await channel.WriteAsync(packageRegistration, cancellationToken);
+                }
+            }
         }
     }
 }
