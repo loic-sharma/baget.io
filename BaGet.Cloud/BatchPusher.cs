@@ -65,7 +65,10 @@ namespace BaGet
             var operationsFull =  _tableOperations.Count >= MaxTableOperations;
             var actionsFull = _indexActions.Count >= AzureSearchBatchIndexer.MaxBatchSize;
 
-            if (!onlyFullOperations || operationsFull || actionsFull)
+            var flushActions = !onlyFullActions || actionsFull;
+            var flushOperations = flushActions || !onlyFullOperations || operationsFull;
+
+            if (flushOperations && _tableOperations.Count > 0)
             {
                 _logger.LogDebug("Executing batch of {Count} table operations...", _tableOperations.Count);
 
@@ -73,7 +76,7 @@ namespace BaGet
                 _tableOperations = new TableBatchOperation();
             }
 
-            if (!onlyFullActions || actionsFull)
+            if (flushActions && _indexActions.Count > 0)
             {
                 _logger.LogDebug("Executing batch of {Count} index actions...", _indexActions.Count);
 
