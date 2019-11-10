@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,36 +8,48 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using BaGet.Azure;
 using BaGet.Core;
+using BaGet.Protocol;
+using BaGet.Protocol.Catalog;
 using Microsoft.Azure.Search.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NuGet.Packaging.Core;
 
 namespace BaGet
 {
     public class UpdatePackagesCommand : ICommand
     {
+        private readonly NuGetClientFactory _clientFactory;
+        private readonly ICursor _cursor;
         private readonly IPackageService _packages;
         private readonly DownloadDataClient _downloadClient;
         private readonly TableOperationBuilder _operationBuilder;
         private readonly IndexActionBuilder _indexActionBuilder;
-        private readonly BatchPusher _batchPusher;
+        private readonly Func<BatchTableClient> _tableClientFactory;
+        private readonly Func<BatchSearchClient> _searchClientFactory;
         private readonly IOptions<UpdatePackagesOptions> _options;
         private readonly ILogger<UpdatePackagesCommand> _logger;
 
         public UpdatePackagesCommand(
+            NuGetClientFactory clientFactory,
+            ICursor cursor,
             IPackageService packages,
             DownloadDataClient downloadClient,
             TableOperationBuilder tableOperationBuilder,
             IndexActionBuilder indexActionBuilder,
-            BatchPusher batchPusher,
+            Func<BatchTableClient> tableClientFactory,
+            Func<BatchSearchClient> searchClientFactory,
             IOptions<UpdatePackagesOptions> options,
             ILogger<UpdatePackagesCommand> logger)
         {
+            _clientFactory = clientFactory;
+            _cursor = cursor;
             _packages = packages;
             _downloadClient = downloadClient;
             _operationBuilder = tableOperationBuilder;
             _indexActionBuilder = indexActionBuilder;
-            _batchPusher = batchPusher;
+            _tableClientFactory = tableClientFactory;
+            _searchClientFactory = searchClientFactory;
             _options = options;
             _logger = logger;
         }
@@ -55,7 +68,32 @@ namespace BaGet
                 return;
             }
 
-            var idsToIndex = new HashSet<string>();
+            var minCursor = DateTimeOffset.MinValue;
+            var maxCursor = await _cursor.GetAsync(cancellationToken);
+            if (maxCursor == null)
+            {
+                maxCursor = DateTimeOffset.MinValue;
+            }
+
+            _logger.LogInformation("Finding catalog leafs committed before time {Cursor}...", maxCursor);
+
+            var catalogClient = _clientFactory.CreateCatalogClient();
+            var catalogLeafItems = await catalogClient.GetLeafItemsAsync(
+                minCursor,
+                maxCursor.Value,
+                _logger,
+                cancellationToken);
+
+            _logger.LogInformation("Removing duplicate catalog leafs...");
+
+            var packageIds = catalogLeafItems
+                .GroupBy(l => new PackageIdentity(l.PackageId, l.ParsePackageVersion()))
+                .Select(g => g.OrderByDescending(l => l.CommitTimestamp).First())
+                .Where(l => l.IsPackageDetails())
+                .Select(l => l.PackageId);
+
+            var knownPackageIds = new HashSet<string>(packageIds, StringComparer.OrdinalIgnoreCase);
+            var idsToIndex = new ConcurrentBag<string>();
             var newDownloads = new DownloadData();
             var stopwatch = Stopwatch.StartNew();
 
@@ -67,110 +105,93 @@ namespace BaGet
 
                 foreach (var id in newDownloads.Keys)
                 {
-                    idsToIndex.Add(id);
+                    if (knownPackageIds.Contains(id))
+                    {
+                        idsToIndex.Add(id);
+                    }
                 }
             }
 
-            var channel = Channel.CreateBounded<PackageRegistration>(new BoundedChannelOptions(5000)
+            var channel = Channel.CreateBounded<IndexAction<KeyedDocument>>(new BoundedChannelOptions(5000)
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleWriter = false,
-                SingleReader = true,
+                SingleReader = false,
             });
 
-            var produceTask = ProducePackageRegistrationsAsync(
-                channel.Writer,
-                new ConcurrentBag<string>(idsToIndex),
-                cancellationToken);
+            var updatePackagesTask = ParallelAsync.RepeatAsync(
+                CreateUpdatePackagesWorker(idsToIndex, newDownloads, channel.Writer, cancellationToken));
+            var updateSearchTask = ParallelAsync.RepeatAsync(
+                degreesOfConcurrency: 4,
+                taskFactory: CreateUpdateSearchWorker(channel.Reader, cancellationToken));
 
-            while (await channel.Reader.WaitToReadAsync(cancellationToken))
-            {
-                while (channel.Reader.TryRead(out var packageRegistration))
-                {
-                    var packageId = packageRegistration.PackageId;
-                    var packages = packageRegistration.Packages;
-
-                    _logger.LogInformation("Updating package {PackageId}...", packageId);
-
-                    // Update the Azure Storage Table.
-                    foreach (var package in packages)
-                    {
-                        if (newDownloads.TryGetDownloadCount(packageId, package.NormalizedVersionString, out var downloadCount))
-                        {
-                            package.Downloads = downloadCount;
-
-                            await _batchPusher.AddAsync(
-                                _operationBuilder.UpdateDownloads(
-                                    packageId,
-                                    package.Version,
-                                    downloadCount),
-                                cancellationToken);
-                        }
-                    }
-
-                    // Update the Azure Search index.
-                    var actions = _indexActionBuilder.UpdateDownloads(packageRegistration);
-
-                    foreach (var action in actions)
-                    {
-                        await _batchPusher.AddAsync(action, cancellationToken);
-                    }
-
-                    // The package ID is the Table's partition key. Since a Table batch can only affect a single
-                    // partition, flush the Table operations before moving onto the next package ID.
-                    await _batchPusher.FlushAsync(
-                        onlyFullOperations: false,
-                        onlyFullActions: true,
-                        cancellationToken);
-                }
-            }
-
-            // Persist anything that's pending.
-            await produceTask;
-            await _batchPusher.FlushAsync(
-                onlyFullOperations: false,
-                onlyFullActions: false,
-                cancellationToken);
+            await updatePackagesTask;
+            channel.Writer.Complete();
+            await updateSearchTask;
 
             _logger.LogInformation(
                 "Updated packages in {TotalSeconds} seconds",
                 stopwatch.Elapsed.TotalSeconds);
         }
 
-        private async Task ProducePackageRegistrationsAsync(
-            ChannelWriter<PackageRegistration> channel,
-            ConcurrentBag<string> packageIds,
+        private Func<Task> CreateUpdatePackagesWorker(
+            ConcurrentBag<string> idsToIndex,
+            DownloadData newDownloads,
+            ChannelWriter<IndexAction<KeyedDocument>> indexActionWriter,
             CancellationToken cancellationToken)
         {
-            await ParallelAsync.RunAsync(
-                packageIds,
-                ProducePackageRegistrationAsync,
-                cancellationToken);
-
-            _logger.LogInformation("Finished producing package registrations");
-            channel.Complete();
-            return;
-
-            async Task ProducePackageRegistrationAsync(string packageId, CancellationToken cancellationToken1)
+            return async () =>
             {
-                var packages = await _packages.FindAsync(packageId, includeUnlisted: true, cancellationToken);
+                var worker = new UpdatePackageWorker(
+                    _packages,
+                    newDownloads,
+                    _tableClientFactory(),
+                    _operationBuilder,
+                    _indexActionBuilder,
+                    indexActionWriter,
+                    _logger);
 
-                // Skip if package does not exist.
-                if (!packages.Any())
+                while (idsToIndex.TryTake(out var packageId))
                 {
-                    return;
+                    var attempt = 0;
+
+                    while (true)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        try
+                        {
+                            await worker.UpdateAsync(packageId, cancellationToken);
+                            break;
+                        }
+                        catch (Exception) when (attempt < 3)
+                        {
+                            attempt++;
+                        }
+                    }
                 }
+            };
+        }
 
-                var latestPackageId = packages.OrderByDescending(p => p.Version).Select(p => p.Id).First();
-                var packageRegistration = new PackageRegistration(
-                    packageId,
-                    packages);
+        private Func<Task> CreateUpdateSearchWorker(
+            ChannelReader<IndexAction<KeyedDocument>> indexActionReader,
+            CancellationToken cancellationToken)
+        {
+            return async () =>
+            {
+                var batchSearchClient = _searchClientFactory();
 
-                if (!channel.TryWrite(packageRegistration))
+                while (await indexActionReader.WaitToReadAsync(cancellationToken))
                 {
-                    await channel.WriteAsync(packageRegistration, cancellationToken);
+                    while (indexActionReader.TryRead(out var indexAction))
+                    {
+                        if (!batchSearchClient.TryAdd(indexAction))
+                        {
+                            await batchSearchClient.AddAsync(indexAction, cancellationToken);
+                        }
+                    }
                 }
-            }
+            };
         }
     }
 }

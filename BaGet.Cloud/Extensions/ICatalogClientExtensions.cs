@@ -11,7 +11,7 @@ namespace BaGet
 {
     public static class ICatalogClientExtensions
     {
-        public async static Task<(CatalogIndex, IEnumerable<CatalogLeafItem>)> LoadCatalogAsync(
+        public async static Task<(CatalogIndex, IEnumerable<CatalogLeafItem>)> GetIndexAndLeafItemsAsync(
             this ICatalogClient catalogClient,
             DateTimeOffset minCursor,
             DateTimeOffset maxCursor,
@@ -45,6 +45,18 @@ namespace BaGet
 
                 logger.LogInformation("Processed catalog page {CatalogPageUrl}", pageItem.CatalogPageUrl);
             }
+        }
+
+        public async static Task<IEnumerable<CatalogLeafItem>> GetLeafItemsAsync(
+            this ICatalogClient catalogClient,
+            DateTimeOffset minCursor,
+            DateTimeOffset maxCursor,
+            ILogger logger,
+            CancellationToken cancellationToken)
+        {
+            var result = await GetIndexAndLeafItemsAsync(catalogClient, minCursor, maxCursor, logger, cancellationToken);
+
+            return result.Item2;
         }
     }
 }
