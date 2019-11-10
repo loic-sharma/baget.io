@@ -123,10 +123,18 @@ namespace BaGet
             CatalogLeafItem catalogLeafItem,
             CancellationToken cancellationToken)
         {
-            await _packages.UnlistPackageAsync(
+            var success = await _packages.HardDeletePackageAsync(
                 catalogLeafItem.PackageId,
                 catalogLeafItem.ParsePackageVersion(),
                 cancellationToken);
+
+            // Update the search service.
+            if (success)
+            {
+                await _indexer.IndexAsync(
+                    new Package { Id = catalogLeafItem.PackageId },
+                    cancellationToken);
+            }
         }
 
         private async Task IndexPackageAsync(

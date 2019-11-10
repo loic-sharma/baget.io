@@ -4,6 +4,7 @@ using System.Collections.Generic;
 
 namespace BaGet
 {
+    // Based off: https://github.com/NuGet/NuGet.Services.Metadata/blob/f3784b55a5ff39e9917c94160790b08b64438d77/src/NuGet.Services.AzureSearch/AuxiliaryFiles/DownloadByVersionData.cs
     public class DownloadByVersionData : IReadOnlyDictionary<string, long>
     {
         private readonly Dictionary<string, long> _versions

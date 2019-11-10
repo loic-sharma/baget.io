@@ -38,7 +38,6 @@ namespace BaGet
 
                 using (var stream = await response.Content.ReadAsStreamAsync())
                 {
-
                     ReadStream(
                         stream,
                         (id, version, downloadCount) =>
