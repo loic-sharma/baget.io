@@ -50,13 +50,16 @@ namespace BaGet
             _logger.LogInformation("Finding catalog leafs committed after time {Cursor}...", minCursor);
 
             var catalogClient = _clientFactory.CreateCatalogClient();
-            var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
+            var catalogIndexAndLeafItems = await catalogClient.GetIndexAndLeafItemsAsync(
                 minCursor.Value,
                 maxCursor,
                 _logger,
                 cancellationToken);
 
             _logger.LogInformation("Removing duplicate catalog leafs...");
+
+            var catalogIndex = catalogIndexAndLeafItems.Item1;
+            var catalogLeafItems = catalogIndexAndLeafItems.Item2;
 
             catalogLeafItems = catalogLeafItems
                 .GroupBy(l => new PackageIdentity(l.PackageId, l.ParsePackageVersion()))

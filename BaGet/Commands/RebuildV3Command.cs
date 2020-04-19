@@ -51,7 +51,7 @@ namespace BaGet
             _logger.LogInformation("Finding catalog leafs committed before time {Cursor}...", maxCursor);
 
             var catalogClient = _clientFactory.CreateCatalogClient();
-            var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
+            var catalogLeafItems = await catalogClient.GetLeafItemsAsync(
                 minCursor,
                 maxCursor.Value,
                 _logger,

@@ -1,15 +1,17 @@
 using System;
 using System.Net;
 using System.Net.Http;
+using System.Threading.Channels;
 using BaGet.Azure;
-using BaGet.Azure.Search;
 using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
 using Microsoft.Azure.Cosmos.Table;
 using Microsoft.Azure.Search;
+using Microsoft.Azure.Search.Models;
 using Microsoft.Azure.ServiceBus;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage.Blob;
 
@@ -90,11 +92,27 @@ namespace BaGet
             services.AddSingleton<ICursor, BlobCursor>();
             services.AddSingleton<IUrlGenerator, UrlGenerator>();
             services.AddSingleton<IPackageDownloadsSource, PackageDownloadsJsonSource>();
+            services.AddSingleton<TableOperationBuilder>();
 
             services.AddSingleton<ProcessCatalogLeafItem>();
             services.AddSingleton<QueueCatalogLeafItems>();
             services.AddSingleton<BatchQueueClient>();
             services.AddSingleton<PackageIndexer>();
+            services.AddSingleton<DownloadDataClient>();
+
+            services.AddSingleton<Func<BatchTableClient>>(provider =>
+            {
+                return () => new BatchTableClient(
+                    provider.GetRequiredService<CloudTableClient>(),
+                    provider.GetRequiredService<ILogger<BatchTableClient>>());
+            });
+
+            services.AddSingleton<Func<BatchSearchClient>>(provider =>
+            {
+                return () => new BatchSearchClient(
+                    provider.GetRequiredService<AzureSearchBatchIndexer>(),
+                    provider.GetRequiredService<ILogger<BatchSearchClient>>());
+            });
 
             services.AddSingleton<AzureSearchBatchIndexer>();
             services.AddSingleton<IndexActionBuilder>();

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using BaGet.Azure.Search;
+using BaGet.Azure;
 using BaGet.Core;
 using BaGet.Protocol;
 using BaGet.Protocol.Catalog;
@@ -21,6 +21,7 @@ namespace BaGet
         private readonly ICursor _cursor;
         private readonly IPackageService _packages;
         private readonly IndexActionBuilder _actionBuilder;
+        private readonly Func<BatchSearchClient> _searchClientFactory;
         private readonly AzureSearchBatchIndexer _indexer;
         private readonly ILogger<RebuildSearchCommand> _logger;
 
@@ -29,6 +30,7 @@ namespace BaGet
             ICursor cursor,
             IPackageService packages,
             IndexActionBuilder actionBuilder,
+            Func<BatchSearchClient> searchClientFactory,
             AzureSearchBatchIndexer indexer,
             ILogger<RebuildSearchCommand> logger)
         {
@@ -36,6 +38,7 @@ namespace BaGet
             _cursor = cursor;
             _packages = packages;
             _actionBuilder = actionBuilder;
+            _searchClientFactory = searchClientFactory;
             _indexer = indexer;
             _logger = logger;
         }
@@ -52,7 +55,7 @@ namespace BaGet
             _logger.LogInformation("Finding catalog leafs committed before time {Cursor}...", maxCursor);
 
             var catalogClient = _clientFactory.CreateCatalogClient();
-            var (catalogIndex, catalogLeafItems) = await catalogClient.LoadCatalogAsync(
+            var catalogLeafItems = await catalogClient.GetLeafItemsAsync(
                 minCursor,
                 maxCursor.Value,
                 _logger,
@@ -118,7 +121,7 @@ namespace BaGet
             {
                 _logger.LogInformation("Adding package {PackageId}...", packageId);
 
-                var packages = await _packages.FindAsync(packageId, includeUnlisted: false);
+                var packages = await _packages.FindAsync(packageId, includeUnlisted: false, cancellationToken);
                 if (packages.Count == 0)
                 {
                     _logger.LogWarning(
@@ -145,26 +148,22 @@ namespace BaGet
             ChannelReader<IndexAction<KeyedDocument>> channel,
             CancellationToken cancellationToken)
         {
-            var actions = new List<IndexAction<KeyedDocument>>();
+            var batchSearchClient = _searchClientFactory();
 
             while (await channel.WaitToReadAsync(cancellationToken))
             {
                 while (channel.TryRead(out var action))
                 {
-                    actions.Add(action);
-
-                    if (actions.Count >= AzureSearchBatchIndexer.MaxBatchSize)
+                    if (!batchSearchClient.TryAdd(action))
                     {
-                        await _indexer.IndexAsync(actions, cancellationToken);
-                        actions.Clear();
+                        await batchSearchClient.AddAsync(action, cancellationToken);
                     }
                 }
             }
 
-            if (actions.Any())
-            {
-                await _indexer.IndexAsync(actions, cancellationToken);
-            }
+            await batchSearchClient.FlushAsync(
+                onlyFull: false,
+                cancellationToken);
 
             _logger.LogInformation("Finished consuming index actions");
         }

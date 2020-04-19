@@ -1,13 +1,10 @@
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using BaGet.Azure.Search;
+using BaGet.Azure;
 using BaGet.Core;
-using BaGet.Protocol.Models;
-using Microsoft.Azure.Search;
 using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
@@ -51,9 +48,9 @@ namespace BaGet
             _logger = logger;
         }
 
-        public async Task BuildAsync(string packageId, CancellationToken cancellationToken = default)
+        public async Task BuildAsync(string packageId, CancellationToken cancellationToken)
         {
-            var packages = await _packages.FindAsync(packageId, includeUnlisted: true);
+            var packages = await _packages.FindAsync(packageId, includeUnlisted: true, cancellationToken);
             if (!packages.Any())
             {
                 _logger.LogError("Could not index package {PackageId} because it does not exist", packageId);
